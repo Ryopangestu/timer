@@ -119,6 +119,74 @@
             width: 500px;
             font-size: 1.1rem;
         }
+        
+        /* Mobile responsive styles */
+        @media (max-width: 640px) {
+            #timer-table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            
+            #timer-table th, 
+            #timer-table td {
+                min-width: 70px;
+                padding: 8px 4px;
+                font-size: 0.8rem;
+            }
+            
+            /* Name column specific */
+            #timer-table td:nth-child(2) {
+                min-width: 120px;
+                max-width: 150px;
+                white-space: normal;
+                word-break: break-word;
+            }
+            
+            /* Input fields */
+            .name-input {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 4px;
+                font-size: 0.8rem;
+            }
+            
+            .timer-input {
+                font-size: 0.8rem;
+                padding: 4px;
+            }
+            
+            /* Buttons */
+            .start-btn, .stop-btn, .delete-btn {
+                padding: 4px 2px;
+                font-size: 0.7rem;
+            }
+            
+            /* Timer display */
+            .timer-display {
+                padding: 4px;
+                font-size: 0.9rem;
+            }
+            
+            /* Converter section */
+            .converter-container {
+                padding: 8px;
+            }
+            
+            .converter-title {
+                font-size: 0.9rem;
+            }
+            
+            .time-input {
+                padding: 4px;
+                font-size: 0.8rem;
+            }
+            
+            .converter-btn {
+                padding: 4px;
+                font-size: 0.8rem;
+            }
+        }
     </style>
 </head>
 <body class="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500">
@@ -138,12 +206,12 @@
             <table class="min-w-full divide-y divide-gray-200" id="timer-table">
                 <thead class="table-header bg-gray-50 sticky top-0">
                     <tr>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Timer</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Mulai</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Stop</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Hapus</th>
+                        <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
+                        <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
+                        <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Timer</th>
+                        <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Mulai</th>
+                        <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Stop</th>
+                        <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Hapus</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
@@ -267,34 +335,34 @@
         function createNewRow(rowNumber, timerData = null) {
             const newRow = document.createElement('tr');
             newRow.innerHTML = `
-                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-center">${rowNumber}</td>
-                <td class="px-4 py-3 whitespace-nowrap text-center">
-                    <input type="text" placeholder="Masukkan Nama" class="border border-gray-300 rounded px-2 py-1 w-full name-input bg-transparent" 
+                <td class="px-2 py-2 whitespace-nowrap text-sm font-medium text-gray-900 text-center">${rowNumber}</td>
+                <td class="px-2 py-2 whitespace-nowrap text-center" style="min-width: 120px;">
+                    <input type="text" placeholder="Nama" class="border border-gray-300 rounded px-1 py-1 w-full name-input bg-transparent" 
                            value="${timerData?.name || ''}">
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-center">
-                    <input type="time" step="1" class="border border-gray-300 rounded px-2 py-1 w-full timer-input bg-transparent" 
+                <td class="px-2 py-2 whitespace-nowrap text-center">
+                    <input type="time" step="1" class="border border-gray-300 rounded px-1 py-1 w-full timer-input bg-transparent" 
                            value="${timerData?.timerInputValue || '24:00:00'}">
-                    <div class="bg-gray-800 text-white text-center rounded px-4 py-2 timer-display text-lg 
+                    <div class="bg-gray-800 text-white text-center rounded px-2 py-1 timer-display text-sm 
                               ${timerData?.timerVisible ? '' : 'hidden'}">
                         ${timerData?.timer || '24:00:00'}
                     </div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-center">
-                    <button class="bg-white border border-gray-300 rounded px-2 py-1 start-btn btn w-full
+                <td class="px-2 py-2 whitespace-nowrap text-center">
+                    <button class="bg-white border border-gray-300 rounded px-1 py-1 start-btn btn w-full
                                  ${timerData?.startDisabled ? 'bg-purple-500 text-white' : ''}" 
                             ${timerData?.startDisabled ? 'disabled' : ''}>
                         Mulai
                     </button>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-center">
-                    <button class="bg-gray-200 border border-gray-300 rounded px-2 py-1 stop-btn btn w-full" 
+                <td class="px-2 py-2 whitespace-nowrap text-center">
+                    <button class="bg-gray-200 border border-gray-300 rounded px-1 py-1 stop-btn btn w-full" 
                             ${timerData?.stopDisabled ? 'disabled' : ''}>
                         Stop
                     </button>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-center">
-                    <button class="bg-red-500 text-white border border-gray-300 rounded px-2 py-1 delete-btn btn w-full">
+                <td class="px-2 py-2 whitespace-nowrap text-center">
+                    <button class="bg-red-500 text-white border border-gray-300 rounded px-1 py-1 delete-btn btn w-full">
                         Hapus
                     </button>
                 </td>
