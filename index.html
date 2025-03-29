@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Timer Table with Firebase</title>
+    <!-- Favicon -->
+    <link rel="icon" href="logo.png" type="image/png">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
@@ -101,10 +104,36 @@
         .dark .btn {
             color: #f3f4f6;
         }
+        
+        /* Daily Check-in 24 jam styles */
+        .daily-check-in {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+        .daily-text {
+            color: #facc15; /* Warna kuning */
+        }
+        .hours-box {
+            background-color: #10b981; /* Warna hijau */
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-r from-green-500 to-green-700">
     <div class="main-container bg-white rounded-lg shadow-lg p-4 mx-auto my-4 w-full max-w-7xl">
+        <!-- Tambahkan keterangan Daily Check-in 24 jam di sini -->
+        <div class="daily-check-in">
+            <span class="daily-text">Daily Check-in</span>
+            <span class="hours-box">24 jam</span>
+        </div>
+        
         <div class="text-center mb-4">
             <div id="date-time" class="text-lg font-semibold"></div>
         </div>
