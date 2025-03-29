@@ -42,7 +42,7 @@
             border-radius: 0.5rem;
             padding: 0.5rem 1rem;
             display: inline-block;
-            min-width: 100px;
+            min-width: 150px;
             text-align: center;
             font-weight: bold;
             background-color: #ecfdf5;
@@ -212,7 +212,23 @@
                 second: '2-digit',
                 timeZone: 'Asia/Jakarta'
             };
-            return date.toLocaleTimeString('id-ID', options) + ' WIB';
+            const timeString = date.toLocaleTimeString('id-ID', options);
+            
+            // Tambahkan keterangan waktu dalam sehari
+            const hours = date.getHours();
+            let timeOfDay;
+            
+            if (hours >= 3 && hours < 11) {
+                timeOfDay = 'pagi';
+            } else if (hours >= 11 && hours < 15) {
+                timeOfDay = 'siang';
+            } else if (hours >= 15 && hours < 18) {
+                timeOfDay = 'sore';
+            } else {
+                timeOfDay = 'malam';
+            }
+            
+            return `${timeString} (${timeOfDay})`;
         }
 
         async function saveTimerToFirebase(timerId, data) {
