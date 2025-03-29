@@ -175,7 +175,7 @@
             flex-direction: column;
         }
         
-        /* Table container styles - MODIFIED */
+        /* Table container styles */
         .table-container {
             width: 100%;
             position: relative;
@@ -202,7 +202,7 @@
         
         .table-header th {
             position: sticky;
-            top: 6.5rem; /* Adjust based on total header height */
+            top: 6.5rem;
             z-index: 20;
             background-color: #f3f4f6;
         }
@@ -220,67 +220,60 @@
             }
             
             .table-header th {
-                top: 8rem; /* Larger offset for mobile */
+                top: 8rem;
             }
         }
 
-        /* Timeout notification styles */
-        .timeout-container {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
-            z-index: 100;
-            flex-wrap: wrap;
-            justify-content: center;
-            max-width: 90%;
+        /* Persistent Toast Notification Styles */
+        .persistent-toast {
+            background-color: #d33 !important;
+            color: white !important;
+            border-left: 5px solid #ff0000 !important;
+            width: 400px !important;
+            font-size: 1.1rem !important;
         }
-
-        .timeout-notification {
-            background-color: #000;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            border: 2px solid #ff0000;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            font-weight: bold;
-            animation: fadeIn 0.5s ease-in-out;
-            display: flex;
-            align-items: center;
-            white-space: nowrap;
+        
+        .persistent-toast .swal2-title {
+            color: white !important;
+            font-size: 1.2rem !important;
+            text-align: left !important;
+            margin-bottom: 8px !important;
         }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        
+        .persistent-toast .swal2-html-container {
+            color: white !important;
+            text-align: left !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
-
-        .timeout-notification::before {
-            content: "⏰";
-            margin-right: 8px;
-            font-size: 1.2em;
+        
+        .persistent-toast .swal2-confirm {
+            background-color: #ffffff !important;
+            color: #d33 !important;
+            border: none !important;
+            margin-top: 10px !important;
+            padding: 5px 15px !important;
+        }
+        
+        .persistent-toast .swal2-icon {
+            width: 28px !important;
+            height: 28px !important;
+            margin-right: 10px !important;
         }
     </style>
 </head>
 <body class="bg-gradient-to-r from-green-500 to-green-700">
     <div class="main-container bg-white rounded-lg shadow-lg p-4 mx-auto my-4 w-full max-w-7xl">
-        <!-- Modified table container with all sticky headers -->
         <div class="table-container">
-            <!-- Sticky header group -->
             <div class="sticky-header-group">
-                <!-- Daily Check-in Section -->
                 <div class="daily-check-in">
                     <span class="daily-text">Daily Check-in</span>
                     <span class="hours-box">24 jam</span>
                 </div>
                 
-                <!-- Date Time -->
-                <div id="date-time" class="text-lg font-semibold sticky-date"></div>
+                <div id="date-time" class="text-lg font-semib sticky-date"></div>
             </div>
             
-            <!-- Table -->
             <table id="timer-table">
                 <thead class="table-header">
                     <tr>
@@ -333,9 +326,6 @@
             </div>
         </div>
     </div>
-    
-    <!-- Timeout notifications container -->
-    <div class="timeout-container" id="timeout-container"></div>
     
     <script>
         const firebaseConfig = {
@@ -517,7 +507,6 @@
             const rowNumber = row.querySelector('td').textContent;
             const urlContainer = row.querySelector('.url-container');
 
-            // Initialize timer state
             timerStates[rowNumber] = {
                 isRunning: false,
                 remainingSeconds: 0,
@@ -675,25 +664,32 @@
 
                         if (!shownNotifications.has(rowNumber)) {
                             shownNotifications.add(rowNumber);
-                            showNotification(
-                                'Timer Selesai', 
-                                `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) telah berhenti`, 
-                                'info'
-                            );
                             
-                            // Add timeout notification
-                            const timeoutContainer = document.getElementById('timeout-container');
-                            const notification = document.createElement('div');
-                            notification.className = 'timeout-notification';
-                            notification.textContent = `#${rowNumber} ${nameInput.value || 'Tanpa Nama'} telah habis`;
-                            notification.dataset.rowNumber = rowNumber;
-                            
-                            // Auto remove after 5 seconds
-                            setTimeout(() => {
-                                notification.remove();
-                            }, 5000);
-                            
-                            timeoutContainer.appendChild(notification);
+                            // Persistent toast notification
+                            const Toast = Swal.mixin({
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: true,
+                                confirmButtonText: 'Tutup',
+                                timer: 0, // Won't auto-close
+                                timerProgressBar: false,
+                                width: '400px',
+                                background: '#d33',
+                                color: 'white',
+                                customClass: {
+                                    popup: 'persistent-toast'
+                                },
+                                didOpen: (toast) => {
+                                    toast.addEventListener('mouseenter', Swal.stopTimer);
+                                    toast.addEventListener('mouseleave', Swal.resumeTimer);
+                                }
+                            });
+
+                            Toast.fire({
+                                icon: 'warning',
+                                title: `Timer #${rowNumber} Selesai`,
+                                html: `<b>${nameInput.value || 'Tanpa Nama'}</b> telah mencapai waktu habis`,
+                            });
                         }
                         
                         return;
@@ -859,13 +855,6 @@
                     if (activeIntervals[rowNumber]) {
                         clearInterval(activeIntervals[rowNumber]);
                         delete activeIntervals[rowNumber];
-                    }
-                    
-                    // Remove any existing timeout notification for this row
-                    const timeoutContainer = document.getElementById('timeout-container');
-                    const notification = timeoutContainer.querySelector(`.timeout-notification[data-row-number="${rowNumber}"]`);
-                    if (notification) {
-                        notification.remove();
                     }
                     
                     delete timerStates[rowNumber];
@@ -1091,25 +1080,32 @@
 
                                     if (!shownNotifications.has(rowNumber)) {
                                         shownNotifications.add(rowNumber);
-                                        showNotification(
-                                            'Timer Selesai', 
-                                            `Timer #${rowNumber} (${timerData.name || 'Tanpa Nama'}) telah berhenti`, 
-                                            'info'
-                                        );
                                         
-                                        // Add timeout notification
-                                        const timeoutContainer = document.getElementById('timeout-container');
-                                        const notification = document.createElement('div');
-                                        notification.className = 'timeout-notification';
-                                        notification.textContent = `#${rowNumber} ${timerData.name || 'Tanpa Nama'} telah habis`;
-                                        notification.dataset.rowNumber = rowNumber;
-                                        
-                                        // Auto remove after 5 seconds
-                                        setTimeout(() => {
-                                            notification.remove();
-                                        }, 5000);
-                                        
-                                        timeoutContainer.appendChild(notification);
+                                        // Persistent toast notification
+                                        const Toast = Swal.mixin({
+                                            toast: true,
+                                            position: 'top-end',
+                                            showConfirmButton: true,
+                                            confirmButtonText: 'Tutup',
+                                            timer: 0, // Won't auto-close
+                                            timerProgressBar: false,
+                                            width: '400px',
+                                            background: '#d33',
+                                            color: 'white',
+                                            customClass: {
+                                                popup: 'persistent-toast'
+                                            },
+                                            didOpen: (toast) => {
+                                                toast.addEventListener('mouseenter', Swal.stopTimer);
+                                                toast.addEventListener('mouseleave', Swal.resumeTimer);
+                                            }
+                                        });
+
+                                        Toast.fire({
+                                            icon: 'warning',
+                                            title: `Timer #${rowNumber} Selesai`,
+                                            html: `<b>${timerData.name || 'Tanpa Nama'}</b> telah mencapai waktu habis`,
+                                        });
                                     }
                                     
                                     return;
