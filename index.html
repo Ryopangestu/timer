@@ -16,31 +16,91 @@
             transform: scale(0.95);
         }
         
-        /* Table border styles */
+        /* Table border styles - UPDATED */
+        .table-container {
+            width: 100%;
+            position: relative;
+            overflow: auto;
+            max-height: 70vh;
+            border: 1px solid #6b7280;
+            border-radius: 0.5rem;
+        }
+        
+        .dark .table-container {
+            border-color: #4b5563;
+        }
+
         table {
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             width: 100%;
         }
+        
         th, td {
             border: 1px solid #6b7280;
             padding: 0.75rem;
             text-align: center;
+            position: relative;
+            background-color: white;
         }
+        
         th {
             background-color: #f3f4f6;
             font-weight: 600;
             text-transform: uppercase;
             font-size: 0.75rem;
             letter-spacing: 0.05em;
+            position: sticky;
         }
+        
         .dark th {
             background-color: #111827;
             color: #f3f4f6;
         }
+        
         .dark td {
             background-color: #1f2937;
             color: #f3f4f6;
             border-color: #4b5563;
+        }
+        
+        /* Sticky header styles - UPDATED */
+        .sticky-header-group {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background-color: white;
+            padding-top: 0.5rem;
+        }
+        
+        .dark .sticky-header-group {
+            background-color: #1f2937;
+        }
+        
+        .table-header th {
+            position: sticky;
+            top: 6.5rem;
+            z-index: 40;
+            border-bottom: 2px solid #6b7280;
+        }
+        
+        .dark .table-header th {
+            border-bottom-color: #4b5563;
+        }
+        
+        /* Scrollbar styles */
+        .table-container::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        
+        .table-container::-webkit-scrollbar-thumb {
+            background-color: #6b7280;
+            border-radius: 4px;
+        }
+        
+        .dark .table-container::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
         }
         
         /* Timer display styles */
@@ -56,6 +116,7 @@
             background-color: #ecfdf5;
             color: #047857;
         }
+        
         .dark .timer-display-box {
             border-color: #6ee7b7;
             background-color: #064e3b;
@@ -74,6 +135,7 @@
             background-color: #ecfdf5;
             color: #047857;
         }
+        
         .dark .finish-time-box {
             border-color: #6ee7b7;
             background-color: #064e3b;
@@ -89,6 +151,7 @@
             min-width: 150px;
             background-color: white;
         }
+        
         .dark .name-input {
             border-color: #4b5563;
             background-color: #374151;
@@ -106,6 +169,7 @@
             margin-top: 0.25rem;
             font-size: 0.8rem;
         }
+        
         .dark .url-input {
             border-color: #4b5563;
             background-color: #374151;
@@ -119,6 +183,7 @@
             color: #3b82f6;
             cursor: pointer;
         }
+        
         .dark .link-icon {
             color: #93c5fd;
         }
@@ -128,14 +193,9 @@
             background: linear-gradient(270deg, #111827, #1f2937, #374151, #4b5563);
             color: #f3f4f6;
         }
+        
         .dark .main-container {
             background: #1f2937;
-            color: #f3f4f6;
-        }
-        .dark .sticky-header {
-            background-color: #111827;
-        }
-        .dark .btn {
             color: #f3f4f6;
         }
         
@@ -148,9 +208,11 @@
             font-size: 1.5rem;
             justify-content: center;
         }
+        
         .daily-text {
             color: #10b981;
         }
+        
         .hours-box {
             background-color: #10b981;
             color: white;
@@ -165,6 +227,7 @@
             text-decoration: underline;
             cursor: pointer;
         }
+        
         .dark .name-with-link {
             color: #93c5fd;
         }
@@ -173,42 +236,6 @@
         .url-container {
             display: flex;
             flex-direction: column;
-        }
-        
-        /* Table container styles */
-        .table-container {
-            width: 100%;
-            position: relative;
-        }
-        
-        /* Sticky header group */
-        .sticky-header-group {
-            position: sticky;
-            top: 0;
-            z-index: 30;
-            background-color: white;
-            padding-top: 0.5rem;
-        }
-        
-        .dark .sticky-header-group {
-            background-color: #1f2937;
-        }
-        
-        .sticky-date {
-            background-color: inherit;
-            padding: 0.5rem;
-            text-align: center;
-        }
-        
-        .table-header th {
-            position: sticky;
-            top: 6.5rem;
-            z-index: 20;
-            background-color: #f3f4f6;
-        }
-        
-        .dark .table-header th {
-            background-color: #111827;
         }
         
         /* Notification table styles */
@@ -284,12 +311,10 @@
             100% { transform: scale(1); }
         }
         
-        /* Responsive table for mobile */
+        /* Responsive adjustments */
         @media (max-width: 768px) {
-            table {
-                display: block;
-                overflow-x: auto;
-                white-space: nowrap;
+            .table-container {
+                max-height: 60vh;
             }
             
             .table-header th {
@@ -300,7 +325,7 @@
 </head>
 <body class="bg-gradient-to-r from-green-500 to-green-700">
     <div class="main-container bg-white rounded-lg shadow-lg p-4 mx-auto my-4 w-full max-w-7xl">
-        <!-- Table container -->
+        <!-- Table container with improved scrolling -->
         <div class="table-container">
             <!-- Sticky header group -->
             <div class="sticky-header-group">
@@ -314,7 +339,7 @@
                 <div id="date-time" class="text-lg font-semibold sticky-date"></div>
             </div>
             
-            <!-- Table -->
+            <!-- Table with fixed borders -->
             <table id="timer-table">
                 <thead class="table-header">
                     <tr>
