@@ -32,8 +32,6 @@
             text-transform: uppercase;
             font-size: 0.75rem;
             letter-spacing: 0.05em;
-            position: sticky;
-            top: 0;
         }
         .dark th {
             background-color: #111827;
@@ -134,7 +132,7 @@
             background: #1f2937;
             color: #f3f4f6;
         }
-        .dark .table-header {
+        .dark .sticky-header {
             background-color: #111827;
         }
         .dark .btn {
@@ -142,17 +140,13 @@
         }
         
         /* Daily Check-in 24 jam styles */
-        .daily-check-in-container {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 1.5rem;
-        }
         .daily-check-in {
             display: flex;
             align-items: center;
             gap: 0.75rem;
             font-weight: bold;
             font-size: 1.5rem;
+            justify-content: center;
         }
         .daily-text {
             color: #10b981;
@@ -184,6 +178,37 @@
         /* Table container styles - MODIFIED */
         .table-container {
             width: 100%;
+            position: relative;
+        }
+        
+        /* Sticky header group */
+        .sticky-header-group {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            background-color: white;
+            padding-top: 0.5rem;
+        }
+        
+        .dark .sticky-header-group {
+            background-color: #1f2937;
+        }
+        
+        .sticky-date {
+            background-color: inherit;
+            padding: 0.5rem;
+            text-align: center;
+        }
+        
+        .table-header th {
+            position: sticky;
+            top: 6.5rem; /* Adjust based on total header height */
+            z-index: 20;
+            background-color: #f3f4f6;
+        }
+        
+        .dark .table-header th {
+            background-color: #111827;
         }
         
         /* Responsive table for mobile */
@@ -193,25 +218,69 @@
                 overflow-x: auto;
                 white-space: nowrap;
             }
+            
+            .table-header th {
+                top: 8rem; /* Larger offset for mobile */
+            }
+        }
+
+        /* Timeout notification styles */
+        .timeout-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 90%;
+        }
+
+        .timeout-notification {
+            background-color: #000;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            border: 2px solid #ff0000;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            font-weight: bold;
+            animation: fadeIn 0.5s ease-in-out;
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .timeout-notification::before {
+            content: "⏰";
+            margin-right: 8px;
+            font-size: 1.2em;
         }
     </style>
 </head>
 <body class="bg-gradient-to-r from-green-500 to-green-700">
     <div class="main-container bg-white rounded-lg shadow-lg p-4 mx-auto my-4 w-full max-w-7xl">
-        <!-- Daily Check-in 24 jam Section -->
-        <div class="daily-check-in-container">
-            <div class="daily-check-in">
-                <span class="daily-text">Daily Check-in</span>
-                <span class="hours-box">24 jam</span>
-            </div>
-        </div>
-        
-        <div class="text-center mb-4">
-            <div id="date-time" class="text-lg font-semibold"></div>
-        </div>
-        
-        <!-- Modified table container without internal scroll -->
+        <!-- Modified table container with all sticky headers -->
         <div class="table-container">
+            <!-- Sticky header group -->
+            <div class="sticky-header-group">
+                <!-- Daily Check-in Section -->
+                <div class="daily-check-in">
+                    <span class="daily-text">Daily Check-in</span>
+                    <span class="hours-box">24 jam</span>
+                </div>
+                
+                <!-- Date Time -->
+                <div id="date-time" class="text-lg font-semibold sticky-date"></div>
+            </div>
+            
+            <!-- Table -->
             <table id="timer-table">
                 <thead class="table-header">
                     <tr>
@@ -264,6 +333,9 @@
             </div>
         </div>
     </div>
+    
+    <!-- Timeout notifications container -->
+    <div class="timeout-container" id="timeout-container"></div>
     
     <script>
         const firebaseConfig = {
@@ -608,6 +680,20 @@
                                 `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) telah berhenti`, 
                                 'info'
                             );
+                            
+                            // Add timeout notification
+                            const timeoutContainer = document.getElementById('timeout-container');
+                            const notification = document.createElement('div');
+                            notification.className = 'timeout-notification';
+                            notification.textContent = `#${rowNumber} ${nameInput.value || 'Tanpa Nama'} telah habis`;
+                            notification.dataset.rowNumber = rowNumber;
+                            
+                            // Auto remove after 5 seconds
+                            setTimeout(() => {
+                                notification.remove();
+                            }, 5000);
+                            
+                            timeoutContainer.appendChild(notification);
                         }
                         
                         return;
@@ -773,6 +859,13 @@
                     if (activeIntervals[rowNumber]) {
                         clearInterval(activeIntervals[rowNumber]);
                         delete activeIntervals[rowNumber];
+                    }
+                    
+                    // Remove any existing timeout notification for this row
+                    const timeoutContainer = document.getElementById('timeout-container');
+                    const notification = timeoutContainer.querySelector(`.timeout-notification[data-row-number="${rowNumber}"]`);
+                    if (notification) {
+                        notification.remove();
                     }
                     
                     delete timerStates[rowNumber];
@@ -1003,6 +1096,20 @@
                                             `Timer #${rowNumber} (${timerData.name || 'Tanpa Nama'}) telah berhenti`, 
                                             'info'
                                         );
+                                        
+                                        // Add timeout notification
+                                        const timeoutContainer = document.getElementById('timeout-container');
+                                        const notification = document.createElement('div');
+                                        notification.className = 'timeout-notification';
+                                        notification.textContent = `#${rowNumber} ${timerData.name || 'Tanpa Nama'} telah habis`;
+                                        notification.dataset.rowNumber = rowNumber;
+                                        
+                                        // Auto remove after 5 seconds
+                                        setTimeout(() => {
+                                            notification.remove();
+                                        }, 5000);
+                                        
+                                        timeoutContainer.appendChild(notification);
                                     }
                                     
                                     return;
