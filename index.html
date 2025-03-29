@@ -185,9 +185,9 @@
         .sticky-header-group {
             position: sticky;
             top: 0;
-            z-index: 50;
+            z-index: 30;
             background-color: white;
-            padding: 0.5rem;
+            padding-top: 0.5rem;
         }
         
         .dark .sticky-header-group {
@@ -203,7 +203,7 @@
         .table-header th {
             position: sticky;
             top: 6.5rem;
-            z-index: 40;
+            z-index: 20;
             background-color: #f3f4f6;
         }
         
@@ -284,79 +284,16 @@
             100% { transform: scale(1); }
         }
         
-        /* Responsive styles for mobile */
+        /* Responsive table for mobile */
         @media (max-width: 768px) {
             table {
                 display: block;
-                width: 100%;
                 overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-            
-            th, td {
-                min-width: 120px;
                 white-space: nowrap;
-                padding: 0.5rem;
-                font-size: 0.85rem;
-            }
-            
-            .btn {
-                padding: 0.75rem 0.5rem;
-                font-size: 0.8rem;
-                min-width: 60px;
-            }
-            
-            .timer-input, .name-input, .url-input {
-                font-size: 0.9rem;
-                padding: 0.5rem;
-            }
-            
-            .sticky-header-group {
-                padding: 0.5rem 0.25rem;
-            }
-            
-            .daily-check-in {
-                font-size: 1.1rem;
-                gap: 0.5rem;
-            }
-            
-            .notification-box {
-                font-size: 0.8rem;
-                padding: 0.5rem;
-                white-space: normal;
-                min-width: 100px;
-            }
-            
-            .notification-table {
-                flex-wrap: wrap;
-                justify-content: flex-start;
-            }
-            
-            .converter-container {
-                padding: 0.75rem;
-            }
-            
-            .converter-title {
-                font-size: 1rem;
-            }
-            
-            .main-container {
-                padding: 0.75rem;
-                margin: 0.5rem;
             }
             
             .table-header th {
                 top: 8rem;
-            }
-            
-            .timer-display-box, .finish-time-box {
-                min-width: 80px;
-                padding: 0.5rem;
-                font-size: 0.9rem;
-            }
-            
-            .name-input, .url-input {
-                min-width: 120px;
             }
         }
     </style>
@@ -414,7 +351,7 @@
 
         <div class="converter-container bg-white bg-opacity-90 rounded-lg p-4 mt-4 shadow">
             <div class="converter-title text-lg font-bold mb-2">Konverter Waktu WIB ⇄ UTC</div>
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Waktu WIB</label>
                     <input type="time" id="wib-time" class="time-input border border-gray-300 rounded px-3 py-2 w-full" step="1">
@@ -422,8 +359,8 @@
                         WIB → UTC
                     </button>
                 </div>
-                <div class="flex items-center justify-center md:mt-6">
-                    <div class="text-2xl font-bold hidden md:block">⇄</div>
+                <div class="flex items-center justify-center">
+                    <div class="text-2xl font-bold mt-6">⇄</div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Waktu UTC</label>
@@ -466,11 +403,11 @@
                 timer: timer,
                 timerProgressBar: true,
                 showConfirmButton: false,
-                position: window.innerWidth <= 768 ? 'top' : 'top-end',
+                position: 'top-end',
                 toast: true,
                 background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#f8f9fa',
                 color: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#333',
-                width: window.innerWidth <= 768 ? '90%' : '400px'
+                width: '400px'
             });
         }
 
@@ -503,9 +440,7 @@
                 timeOfDay = 'malam';
             }
             
-            return window.innerWidth <= 768 ? 
-                `${timeString} (${timeOfDay})` : 
-                `${timeString} (${timeOfDay})`;
+            return `${timeString} (${timeOfDay})`;
         }
 
         async function saveTimerToFirebase(timerId, data) {
@@ -986,7 +921,7 @@
                     cancelButtonColor: '#3085d6',
                     confirmButtonText: 'Ya, Hapus!',
                     cancelButtonText: 'Batal',
-                    width: window.innerWidth <= 768 ? '90%' : '500px',
+                    width: '500px',
                     background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#fff',
                     color: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#333'
                 });
@@ -1099,56 +1034,37 @@
         function updateDateTime() {
             const now = new Date();
             
-            if (window.innerWidth <= 768) {
-                // Versi mobile sederhana
-                const options = { 
-                    hour: '2-digit', 
-                    minute: '2-digit', 
-                    second: '2-digit',
-                    timeZoneName: 'short'
-                };
-                
-                const wibTime = now.toLocaleTimeString('id-ID', { ...options, timeZone: 'Asia/Jakarta' });
-                const utcTime = now.toLocaleTimeString('id-ID', { ...options, timeZone: 'UTC' });
-                
-                document.getElementById('date-time').innerHTML = `
-                    WIB: ${wibTime}<br>
-                    UTC: ${utcTime}
-                `;
-            } else {
-                // Versi desktop lengkap
-                const optionsWIB = { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric', 
-                    hour: '2-digit', 
-                    minute: '2-digit', 
-                    second: '2-digit', 
-                    timeZone: 'Asia/Jakarta',
-                    timeZoneName: 'short'
-                };
-                const formattedWIB = now.toLocaleDateString('id-ID', optionsWIB);
-                
-                const optionsUTC = { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric', 
-                    hour: '2-digit', 
-                    minute: '2-digit', 
-                    second: '2-digit', 
-                    timeZone: 'UTC',
-                    timeZoneName: 'short'
-                };
-                const formattedUTC = now.toLocaleDateString('id-ID', optionsUTC);
-                
-                document.getElementById('date-time').innerHTML = `
-                    ${formattedWIB} 
-                    <span class="time-separator">|</span> 
-                    ${formattedUTC}
-                `;
-            }
+            const optionsWIB = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit', 
+                timeZone: 'Asia/Jakarta',
+                timeZoneName: 'short'
+            };
+            const formattedWIB = now.toLocaleDateString('id-ID', optionsWIB);
+            
+            const optionsUTC = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit', 
+                timeZone: 'UTC',
+                timeZoneName: 'short'
+            };
+            const formattedUTC = now.toLocaleDateString('id-ID', optionsUTC);
+            
+            document.getElementById('date-time').innerHTML = `
+                ${formattedWIB} 
+                <span class="time-separator">|</span> 
+                ${formattedUTC}
+            `;
         }
 
         function convertWIBtoUTC() {
