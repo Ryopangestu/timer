@@ -22,7 +22,7 @@
             width: 100%;
         }
         th, td {
-            border: 1px solid #6b7280; /* Darker border color */
+            border: 1px solid #6b7280;
             padding: 0.75rem;
             text-align: center;
         }
@@ -42,7 +42,7 @@
         .dark td {
             background-color: #1f2937;
             color: #f3f4f6;
-            border-color: #4b5563; /* Darker border for dark mode */
+            border-color: #4b5563;
         }
         
         /* Timer display styles */
@@ -181,11 +181,18 @@
             flex-direction: column;
         }
         
-        /* Table container styles */
+        /* Table container styles - MODIFIED */
         .table-container {
-            overflow-y: auto;
             width: 100%;
-            max-height: 60vh;
+        }
+        
+        /* Responsive table for mobile */
+        @media (max-width: 768px) {
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
         }
     </style>
 </head>
@@ -203,6 +210,7 @@
             <div id="date-time" class="text-lg font-semibold"></div>
         </div>
         
+        <!-- Modified table container without internal scroll -->
         <div class="table-container">
             <table id="timer-table">
                 <thead class="table-header">
