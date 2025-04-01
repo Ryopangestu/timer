@@ -259,6 +259,63 @@
             animation: pulse 2s infinite;
         }
         
+        .deadline-box {
+            border: 2px solid #3b82f6;
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            display: inline-block;
+            min-width: 150px;
+            text-align: center;
+            font-weight: bold;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+        }
+        .dark .deadline-box {
+            border-color: #93c5fd;
+            background-color: #1e3a8a;
+            color: #dbeafe;
+        }
+        
+        .watchlist-section {
+            margin-top: 2rem;
+            border-top: 2px solid #e5e7eb;
+            padding-top: 1rem;
+        }
+        .dark .watchlist-section {
+            border-top-color: #4b5563;
+        }
+        
+        .watchlist-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: #111827;
+        }
+        .dark .watchlist-title {
+            color: #f3f4f6;
+        }
+        
+        .preset-deadline-btn {
+            background-color: #e0e7ff;
+            color: #4f46e5;
+            border-radius: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            margin: 0.1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .dark .preset-deadline-btn {
+            background-color: #3730a3;
+            color: #a5b4fc;
+        }
+        .preset-deadline-btn:hover {
+            background-color: #c7d2fe;
+        }
+        .dark .preset-deadline-btn:hover {
+            background-color: #4f46e5;
+        }
+        
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -327,6 +384,29 @@
             </button>
         </div>
 
+        <!-- Watchlist Section -->
+        <div class="watchlist-section">
+            <div class="watchlist-title">Watchlist</div>
+            <table id="watchlist-table">
+                <thead class="table-header">
+                    <tr>
+                        <th class="px-4 py-3">No</th>
+                        <th class="px-4 py-3">Nama</th>
+                        <th class="px-4 py-3">Deadline</th>
+                        <th class="px-4 py-3">Selesai</th>
+                        <th class="px-4 py-3">Hapus</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            
+            <div class="text-center mt-4">
+                <button id="add-watchlist-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition duration-200">
+                    Tambah Watchlist Baru
+                </button>
+            </div>
+        </div>
+
         <div class="converter-container bg-white bg-opacity-90 rounded-lg p-4 mt-4 shadow">
             <div class="converter-title text-lg font-bold mb-2">Konverter Waktu WIB ⇄ UTC</div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -379,6 +459,7 @@
         const shownNotifications = new Set();
         const timerStates = {};
         const notificationDebouncers = {};
+        const watchlistIntervals = {};
 
         // ================= UTILITY FUNCTIONS =================
         function showNotification(title, message, icon = 'info', timer = 3000) {
@@ -427,6 +508,19 @@
             }
             
             return `${timeString} (${timeOfDay})`;
+        }
+
+        function formatDeadlineDate(date) {
+            const options = {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'Asia/Jakarta'
+            };
+            return date.toLocaleDateString('id-ID', options);
         }
 
         function updateDateTime() {
@@ -559,6 +653,65 @@
             }
         }
 
+        // ================= WATCHLIST NOTIFICATION =================
+        async function sendWatchlistReminder(rowNumber, itemName, deadline, message) {
+            console.log(`[Watchlist] Mengirim reminder untuk item #${rowNumber}`);
+            
+            const now = new Date();
+            const dateOptions = { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long', 
+                year: 'numeric' 
+            };
+            const formattedDate = now.toLocaleDateString('id-ID', dateOptions);
+            
+            const deadlineStr = formatDeadlineDate(new Date(deadline));
+            
+            const fullMessage = `
+⏰ <b>WATCHLIST REMINDER</b> ⏰
+━━━━━━━━━━━━━━━━━━━━
+🆔 <b>No:</b> <code>#${rowNumber}</code>
+📛 <b>Nama:</b> <code>${itemName || 'Tanpa Nama'}</code>
+⏱ <b>Deadline:</b> <code>${deadlineStr}</code>
+━━━━━━━━━━━━━━━━━━━━
+📢 <b>Pesan:</b> ${message}
+━━━━━━━━━━━━━━━━━━━━
+📅 ${formattedDate}
+
+🌐 <a href="${DASHBOARD_URL}">Lihat Dashboard Timer</a>
+            `;
+
+            try {
+                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: CHAT_ID,
+                        text: fullMessage,
+                        parse_mode: 'HTML',
+                        disable_web_page_preview: true
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                if (!data.ok) {
+                    console.error('[Watchlist] Error dari API:', data);
+                    return false;
+                }
+
+                console.log(`[Watchlist] Reminder untuk #${rowNumber} berhasil dikirim`);
+                return true;
+            } catch (error) {
+                console.error('[Watchlist] Gagal mengirim reminder:', error);
+                return false;
+            }
+        }
+
         // ================= DAILY REMINDER FUNCTIONS =================
         function setupDailyReminder() {
             function checkTime() {
@@ -604,6 +757,25 @@
                 }
             }
 
+            async function getWatchlistForReminder() {
+                try {
+                    const snapshot = await database.ref('watchlist').once('value');
+                    const watchlist = snapshot.val() || {};
+                    
+                    return Object.entries(watchlist)
+                        .filter(([_, item]) => item.name && item.name.trim() !== '' && !item.completed)
+                        .map(([rowNumber, item]) => ({
+                            rowNumber,
+                            name: item.name,
+                            deadline: item.deadline || null,
+                            deadlineStr: item.deadline ? formatDeadlineDate(new Date(item.deadline)) : null
+                        }));
+                } catch (error) {
+                    console.error('Gagal mengambil data watchlist:', error);
+                    return [];
+                }
+            }
+
             async function sendDailyReminder() {
                 console.log('[Daily Reminder] Memulai proses pengiriman...');
                 
@@ -613,8 +785,10 @@
                 }
 
                 const timers = await getTimersForReminder();
-                if (timers.length === 0) {
-                    console.log('[Daily Reminder] Tidak ada timer untuk dikirim');
+                const watchlist = await getWatchlistForReminder();
+
+                if (timers.length === 0 && watchlist.length === 0) {
+                    console.log('[Daily Reminder] Tidak ada timer atau watchlist untuk dikirim');
                     return;
                 }
 
@@ -630,16 +804,28 @@
 
                 let message = `⏰ <b>DAILY REMINDER</b> ⏰\n━━━━━━━━━━━━━━━━━━━━\n`;
                 message += `📅 <b>Tanggal:</b> <code>${dateStr}</code>\n`;
-                message += `⏱ <b>Timer Aktif:</b> <code>${activeTimers}/${timers.length}</code>\n\n`;
-                message += `📋 <b>Daftar Timer:</b>\n\n`;
-
-                timers.forEach((timer, index) => {
-                    const status = timer.isRunning ? "🟢" : "🔴";
-                    message += `${status} <b>#${timer.rowNumber}</b>\n`;
-                    message += `├ Nama: ${timer.name}\n`;
-                    message += `├ Durasi: <code>${formatDuration(timer.duration)}</code>\n`;
-                    message += `└ Estimasi: <code>${formatEstimation(timer.finishTime)}</code>\n\n`;
-                });
+                message += `⏱ <b>Timer Aktif:</b> <code>${activeTimers}/${timers.length}</code>\n`;
+                message += `📝 <b>Watchlist Aktif:</b> <code>${watchlist.length}</code>\n\n`;
+                
+                if (timers.length > 0) {
+                    message += `📋 <b>Daftar Timer:</b>\n\n`;
+                    timers.forEach((timer, index) => {
+                        const status = timer.isRunning ? "🟢" : "🔴";
+                        message += `${status} <b>#${timer.rowNumber}</b>\n`;
+                        message += `├ Nama: ${timer.name}\n`;
+                        message += `├ Durasi: <code>${formatDuration(timer.duration)}</code>\n`;
+                        message += `└ Estimasi: <code>${formatEstimation(timer.finishTime)}</code>\n\n`;
+                    });
+                }
+                
+                if (watchlist.length > 0) {
+                    message += `📋 <b>Daftar Watchlist:</b>\n\n`;
+                    watchlist.forEach((item, index) => {
+                        message += `🔔 <b>#${item.rowNumber}</b>\n`;
+                        message += `├ Nama: ${item.name}\n`;
+                        message += `└ Deadline: <code>${item.deadlineStr}</code>\n\n`;
+                    });
+                }
 
                 message += `━━━━━━━━━━━━━━━━━━━━\n`;
                 message += `🌐 <a href="${DASHBOARD_URL}">Buka Dashboard Timer</a>`;
@@ -783,6 +969,305 @@
             });
         }
 
+        // ================= WATCHLIST COMPLETION HANDLER =================
+        async function handleWatchlistCompletion(rowNumber, nameInput) {
+            try {
+                const watchlistRef = database.ref('watchlist/' + rowNumber);
+                await watchlistRef.update({
+                    completed: true,
+                    completedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+                
+                showNotification(
+                    'Watchlist Selesai', 
+                    `Item #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) telah ditandai selesai`, 
+                    'success'
+                );
+                
+                // Hentikan semua reminder untuk item ini
+                if (watchlistIntervals[rowNumber]) {
+                    watchlistIntervals[rowNumber].forEach(interval => clearInterval(interval));
+                    delete watchlistIntervals[rowNumber];
+                }
+                
+                return true;
+            } catch (error) {
+                console.error(`[Watchlist] Gagal menandai item #${rowNumber} sebagai selesai:`, error);
+                return false;
+            }
+        }
+
+        // ================= WATCHLIST REMINDER SCHEDULER =================
+        function scheduleWatchlistReminders(rowNumber, name, deadline) {
+            // Hentikan reminder sebelumnya jika ada
+            if (watchlistIntervals[rowNumber]) {
+                watchlistIntervals[rowNumber].forEach(interval => clearInterval(interval));
+                delete watchlistIntervals[rowNumber];
+            }
+            
+            const deadlineDate = new Date(deadline);
+            const now = new Date();
+            const timeDiff = deadlineDate - now;
+            
+            if (timeDiff <= 0) {
+                // Deadline sudah lewat
+                return;
+            }
+            
+            const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+            const hoursDiff = Math.floor(timeDiff / (1000 * 60 * 60));
+            
+            watchlistIntervals[rowNumber] = [];
+            
+            // Aturan reminder berdasarkan waktu yang tersisa
+            if (daysDiff <= 2) {
+                // Jika 1-2 hari: reminder 12 jam dan 6 jam sebelum deadline
+                const twelveHoursBefore = new Date(deadlineDate.getTime() - 12 * 60 * 60 * 1000);
+                const sixHoursBefore = new Date(deadlineDate.getTime() - 6 * 60 * 60 * 1000);
+                
+                if (twelveHoursBefore > now) {
+                    const timeout = twelveHoursBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 12 jam!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (sixHoursBefore > now) {
+                    const timeout = sixHoursBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 6 jam!"
+                            );
+                        }, timeout)
+                    );
+                }
+            } else if (daysDiff <= 7) {
+                // Jika 3 hari - 1 minggu: reminder 2 hari, 1 hari, dan 6 jam sebelum deadline
+                const twoDaysBefore = new Date(deadlineDate.getTime() - 2 * 24 * 60 * 60 * 1000);
+                const oneDayBefore = new Date(deadlineDate.getTime() - 24 * 60 * 60 * 1000);
+                const sixHoursBefore = new Date(deadlineDate.getTime() - 6 * 60 * 60 * 1000);
+                
+                if (twoDaysBefore > now) {
+                    const timeout = twoDaysBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 2 hari!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (oneDayBefore > now) {
+                    const timeout = oneDayBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 1 hari!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (sixHoursBefore > now) {
+                    const timeout = sixHoursBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 6 jam!"
+                            );
+                        }, timeout)
+                    );
+                }
+            } else if (daysDiff <= 30) {
+                // Jika 1 minggu - 1 bulan: reminder 1 minggu pertama, 1 minggu terakhir, 2 hari, 1 hari, dan 6 jam sebelum deadline
+                const oneWeekBefore = new Date(deadlineDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+                const twoDaysBefore = new Date(deadlineDate.getTime() - 2 * 24 * 60 * 60 * 1000);
+                const oneDayBefore = new Date(deadlineDate.getTime() - 24 * 60 * 60 * 1000);
+                const sixHoursBefore = new Date(deadlineDate.getTime() - 6 * 60 * 60 * 1000);
+                
+                if (oneWeekBefore > now) {
+                    const timeout = oneWeekBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 1 minggu!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (twoDaysBefore > now) {
+                    const timeout = twoDaysBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 2 hari!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (oneDayBefore > now) {
+                    const timeout = oneDayBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 1 hari!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (sixHoursBefore > now) {
+                    const timeout = sixHoursBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 6 jam!"
+                            );
+                        }, timeout)
+                    );
+                }
+            } else {
+                // Jika lebih dari 1 bulan: reminder setiap bulan, kemudian aturan 1 bulan terakhir
+                const oneMonthBefore = new Date(deadlineDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+                const twoWeeksBefore = new Date(deadlineDate.getTime() - 14 * 24 * 60 * 60 * 1000);
+                const oneWeekBefore = new Date(deadlineDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+                const twoDaysBefore = new Date(deadlineDate.getTime() - 2 * 24 * 60 * 60 * 1000);
+                const oneDayBefore = new Date(deadlineDate.getTime() - 24 * 60 * 60 * 1000);
+                const sixHoursBefore = new Date(deadlineDate.getTime() - 6 * 60 * 60 * 1000);
+                
+                if (oneMonthBefore > now) {
+                    const timeout = oneMonthBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 1 bulan!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (twoWeeksBefore > now) {
+                    const timeout = twoWeeksBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 2 minggu!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (oneWeekBefore > now) {
+                    const timeout = oneWeekBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 1 minggu!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (twoDaysBefore > now) {
+                    const timeout = twoDaysBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 2 hari!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (oneDayBefore > now) {
+                    const timeout = oneDayBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 1 hari!"
+                            );
+                        }, timeout)
+                    );
+                }
+                
+                if (sixHoursBefore > now) {
+                    const timeout = sixHoursBefore - now;
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                "⏳ Deadline dalam 6 jam!"
+                            );
+                        }, timeout)
+                    );
+                }
+            }
+            
+            // Selalu kirim reminder saat deadline tiba
+            watchlistIntervals[rowNumber].push(
+                setTimeout(() => {
+                    sendWatchlistReminder(
+                        rowNumber,
+                        name,
+                        deadline,
+                        "🚨 DEADLINE SUDAH TIBA!"
+                    );
+                }, timeDiff)
+            );
+        }
+
         // ================= FIREBASE FUNCTIONS =================
         async function saveTimerToFirebase(timerId, data) {
             try {
@@ -803,6 +1288,28 @@
                 return true;
             } catch (error) {
                 console.error(`[Firebase] Gagal menghapus timer #${timerId}:`, error);
+                return false;
+            }
+        }
+
+        async function saveWatchlistToFirebase(itemId, data) {
+            try {
+                await database.ref('watchlist/' + itemId).update(data);
+                console.log(`[Firebase] Data watchlist #${itemId} berhasil disimpan`);
+                return true;
+            } catch (error) {
+                console.error(`[Firebase] Gagal menyimpan data watchlist #${itemId}:`, error);
+                return false;
+            }
+        }
+
+        async function deleteWatchlistFromFirebase(itemId) {
+            try {
+                await database.ref('watchlist/' + itemId).remove();
+                console.log(`[Firebase] Watchlist #${itemId} berhasil dihapus`);
+                return true;
+            } catch (error) {
+                console.error(`[Firebase] Gagal menghapus watchlist #${itemId}:`, error);
                 return false;
             }
         }
@@ -833,6 +1340,27 @@
             database.ref('timers').on('value', handler);
             
             return () => database.ref('timers').off('value', handler);
+        }
+
+        function listenForWatchlistChanges(callback) {
+            let debounceTimer;
+            
+            const handler = (snapshot) => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    try {
+                        const watchlist = snapshot.val() || {};
+                        console.log('[Firebase] Data watchlist diperbarui');
+                        callback(watchlist);
+                    } catch (error) {
+                        console.error('[Firebase] Error dalam listener watchlist:', error);
+                    }
+                }, 500);
+            };
+            
+            database.ref('watchlist').on('value', handler);
+            
+            return () => database.ref('watchlist').off('value', handler);
         }
 
         // ================= NOTIFICATION FUNCTIONS =================
@@ -939,6 +1467,46 @@
             return newRow;
         }
 
+        // ================= WATCHLIST ROW FUNCTIONS =================
+        function createNewWatchlistRow(rowNumber, watchlistData = null) {
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-center">${rowNumber}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-center">
+                    <input type="text" placeholder="Masukkan Nama" class="name-input" 
+                           value="${watchlistData?.name || ''}">
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-center">
+                    <div class="flex flex-col items-center">
+                        <input type="datetime-local" class="border border-gray-300 rounded px-2 py-1 deadline-input bg-transparent" 
+                               value="${watchlistData?.deadline ? new Date(watchlistData.deadline).toISOString().slice(0, 16) : ''}">
+                        <div class="flex flex-wrap justify-center mt-1">
+                            <span class="preset-deadline-btn" data-hours="24">1 Hari</span>
+                            <span class="preset-deadline-btn" data-hours="168">1 Minggu</span>
+                            <span class="preset-deadline-btn" data-hours="720">1 Bulan</span>
+                        </div>
+                        ${watchlistData?.deadline ? 
+                            `<div class="deadline-box mt-1">
+                                ${formatDeadlineDate(new Date(watchlistData.deadline))}
+                            </div>` : ''}
+                    </div>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-center">
+                    <button class="bg-green-500 text-white border border-gray-300 rounded px-2 py-1 complete-btn btn w-full"
+                            ${watchlistData?.completed ? 'disabled' : ''}>
+                        Selesai
+                    </button>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-center">
+                    <button class="bg-red-500 text-white border border-gray-300 rounded px-2 py-1 delete-btn btn w-full">
+                        Hapus
+                    </button>
+                </td>
+            `;
+            
+            return newRow;
+        }
+
         function addNewRow() {
             const tableBody = document.querySelector('#timer-table tbody');
             const rowCount = tableBody.querySelectorAll('tr').length + 1;
@@ -961,6 +1529,22 @@
             });
             
             showNotification('Berhasil', `Timer baru (#${rowCount}) telah ditambahkan`, 'success');
+        }
+
+        function addNewWatchlistRow() {
+            const tableBody = document.querySelector('#watchlist-table tbody');
+            const rowCount = tableBody.querySelectorAll('tr').length + 1;
+            const newRow = createNewWatchlistRow(rowCount);
+            tableBody.appendChild(newRow);
+            addEventListenersToWatchlistRow(newRow);
+            
+            saveWatchlistToFirebase(rowCount, {
+                name: '',
+                deadline: null,
+                completed: false
+            });
+            
+            showNotification('Berhasil', `Watchlist baru (#${rowCount}) telah ditambahkan`, 'success');
         }
 
         function addEventListenersToRow(row) {
@@ -1341,6 +1925,134 @@
             });
         }
 
+        function addEventListenersToWatchlistRow(row) {
+            const nameInput = row.querySelector('.name-input');
+            const deadlineInput = row.querySelector('.deadline-input');
+            const completeButton = row.querySelector('.complete-btn');
+            const deleteButton = row.querySelector('.delete-btn');
+            const presetButtons = row.querySelectorAll('.preset-deadline-btn');
+            const deadlineBox = row.querySelector('.deadline-box');
+            const rowNumber = row.querySelector('td').textContent;
+
+            // Set deadline to now + preset hours
+            function setPresetDeadline(hours) {
+                const now = new Date();
+                const newDeadline = new Date(now.getTime() + hours * 60 * 60 * 1000);
+                deadlineInput.value = newDeadline.toISOString().slice(0, 16);
+                updateDeadlineBox(newDeadline);
+                
+                // Simpan ke Firebase
+                saveWatchlistToFirebase(rowNumber, {
+                    name: nameInput.value,
+                    deadline: newDeadline.getTime(),
+                    completed: false
+                });
+                
+                // Jadwalkan reminder
+                scheduleWatchlistReminders(rowNumber, nameInput.value, newDeadline.getTime());
+            }
+
+            // Update deadline box display
+            function updateDeadlineBox(deadlineDate) {
+                if (!deadlineBox) {
+                    const deadlineBoxHTML = `<div class="deadline-box mt-1">${formatDeadlineDate(deadlineDate)}</div>`;
+                    deadlineInput.insertAdjacentHTML('afterend', deadlineBoxHTML);
+                } else {
+                    deadlineBox.textContent = formatDeadlineDate(deadlineDate);
+                    deadlineBox.classList.remove('hidden');
+                }
+            }
+
+            // Event listeners for preset buttons
+            presetButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const hours = parseInt(button.dataset.hours);
+                    setPresetDeadline(hours);
+                });
+            });
+
+            // Event listener for deadline input
+            deadlineInput.addEventListener('change', async () => {
+                if (deadlineInput.value) {
+                    const deadlineDate = new Date(deadlineInput.value);
+                    updateDeadlineBox(deadlineDate);
+                    
+                    await saveWatchlistToFirebase(rowNumber, {
+                        name: nameInput.value,
+                        deadline: deadlineDate.getTime(),
+                        completed: false
+                    });
+                    
+                    // Jadwalkan reminder baru
+                    scheduleWatchlistReminders(rowNumber, nameInput.value, deadlineDate.getTime());
+                }
+            });
+
+            // Event listener for name input
+            nameInput.addEventListener('input', async () => {
+                await saveWatchlistToFirebase(rowNumber, {
+                    name: nameInput.value
+                });
+            });
+
+            // Event listener for complete button
+            completeButton.addEventListener('click', async () => {
+                const { isConfirmed } = await Swal.fire({
+                    title: 'Konfirmasi Selesai',
+                    html: `Yakin ingin menandai <b>Watchlist #${rowNumber}</b> (${nameInput.value || 'Tanpa Nama'}) sebagai selesai?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#10b981',
+                    cancelButtonColor: '#6b7280',
+                    confirmButtonText: 'Ya, Selesai!',
+                    cancelButtonText: 'Batal',
+                    width: '500px',
+                    background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#fff',
+                    color: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#333'
+                });
+
+                if (isConfirmed) {
+                    await handleWatchlistCompletion(rowNumber, nameInput);
+                    completeButton.disabled = true;
+                }
+            });
+
+            // Event listener for delete button
+            deleteButton.addEventListener('click', async () => {
+                const { isConfirmed } = await Swal.fire({
+                    title: 'Konfirmasi Hapus',
+                    html: `Yakin ingin menghapus <b>Watchlist #${rowNumber}</b> (${nameInput.value || 'Tanpa Nama'})?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Ya, Hapus!',
+                    cancelButtonText: 'Batal',
+                    width: '500px',
+                    background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#fff',
+                    color: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#333'
+                });
+
+                if (isConfirmed) {
+                    // Hentikan semua reminder
+                    if (watchlistIntervals[rowNumber]) {
+                        watchlistIntervals[rowNumber].forEach(interval => clearInterval(interval));
+                        delete watchlistIntervals[rowNumber];
+                    }
+                    
+                    await deleteWatchlistFromFirebase(rowNumber);
+                    row.remove();
+                    updateWatchlistRowNumbers();
+                    
+                    showNotification(
+                        'Berhasil', 
+                        `Watchlist #${rowNumber} telah dihapus`, 
+                        'success'
+                    );
+                }
+            });
+        }
+
         function updateRowNumbers() {
             document.querySelectorAll('#timer-table tbody tr').forEach((row, index) => {
                 const newRowNumber = index + 1;
@@ -1372,6 +2084,19 @@
             });
         }
 
+        function updateWatchlistRowNumbers() {
+            document.querySelectorAll('#watchlist-table tbody tr').forEach((row, index) => {
+                const newRowNumber = index + 1;
+                const oldRowNumber = row.querySelector('td').textContent;
+                row.querySelector('td').textContent = newRowNumber;
+                
+                if (watchlistIntervals[oldRowNumber]) {
+                    watchlistIntervals[newRowNumber] = watchlistIntervals[oldRowNumber];
+                    delete watchlistIntervals[oldRowNumber];
+                }
+            });
+        }
+
         // ================= INITIALIZATION =================
         document.addEventListener('DOMContentLoaded', function() {
             // Periksa token bot
@@ -1385,8 +2110,8 @@
                 );
             }
 
-            // Setup Firebase listener
-            const unsubscribe = listenForTimerChanges((timers) => {
+            // Setup Firebase listeners
+            const unsubscribeTimer = listenForTimerChanges((timers) => {
                 const tableBody = document.querySelector('#timer-table tbody');
                 tableBody.innerHTML = '';
                 
@@ -1493,8 +2218,31 @@
                 }
             });
 
+            const unsubscribeWatchlist = listenForWatchlistChanges((watchlist) => {
+                const tableBody = document.querySelector('#watchlist-table tbody');
+                tableBody.innerHTML = '';
+                
+                if (watchlist) {
+                    Object.entries(watchlist).forEach(([rowNumber, watchlistData]) => {
+                        const newRow = createNewWatchlistRow(rowNumber, watchlistData);
+                        tableBody.appendChild(newRow);
+                        addEventListenersToWatchlistRow(newRow);
+                        
+                        // Jika ada deadline dan belum selesai, jadwalkan reminder
+                        if (watchlistData.deadline && !watchlistData.completed) {
+                            scheduleWatchlistReminders(
+                                rowNumber, 
+                                watchlistData.name, 
+                                watchlistData.deadline
+                            );
+                        }
+                    });
+                }
+            });
+
             // Setup event listeners
             document.getElementById('add-row-btn').addEventListener('click', addNewRow);
+            document.getElementById('add-watchlist-btn').addEventListener('click', addNewWatchlistRow);
             document.getElementById('wib-to-utc').addEventListener('click', convertWIBtoUTC);
             document.getElementById('utc-to-wib').addEventListener('click', convertUTCtoWIB);
             
@@ -1512,8 +2260,12 @@
 
             // Cleanup saat halaman ditutup
             window.addEventListener('beforeunload', () => {
-                unsubscribe();
+                unsubscribeTimer();
+                unsubscribeWatchlist();
                 Object.values(activeIntervals).forEach(interval => clearInterval(interval));
+                Object.values(watchlistIntervals).forEach(intervals => {
+                    intervals.forEach(interval => clearInterval(interval));
+                });
             });
         });
     </script>
