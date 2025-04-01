@@ -455,11 +455,11 @@
         // ================= INITIALIZATION =================
         const app = firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        const activeIntervals = {};
+        let activeIntervals = {};
         const shownNotifications = new Set();
         const timerStates = {};
         const notificationDebouncers = {};
-        const watchlistIntervals = {};
+        let watchlistIntervals = {};
 
         // ================= UTILITY FUNCTIONS =================
         function showNotification(title, message, icon = 'info', timer = 3000) {
@@ -658,28 +658,42 @@
             console.log(`[Watchlist] Mengirim reminder untuk item #${rowNumber}`);
             
             const now = new Date();
+            const deadlineDate = new Date(deadline);
+            
+            // Format tanggal yang lebih baik
             const dateOptions = { 
+                weekday: 'short', 
+                day: 'numeric', 
+                month: 'short', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'Asia/Jakarta'
+            };
+            const formattedDeadline = deadlineDate.toLocaleDateString('id-ID', dateOptions);
+            const formattedDate = now.toLocaleDateString('id-ID', { 
                 weekday: 'long', 
                 day: 'numeric', 
                 month: 'long', 
-                year: 'numeric' 
-            };
-            const formattedDate = now.toLocaleDateString('id-ID', dateOptions);
+                year: 'numeric',
+                timeZone: 'Asia/Jakarta'
+            });
             
-            const deadlineStr = formatDeadlineDate(new Date(deadline));
-            
+            // Perbaikan pesan yang typo
+            const cleanMessage = message.replace("TIBAI", "TIBA!");
+
             const fullMessage = `
 ⏰ <b>WATCHLIST REMINDER</b> ⏰
 ━━━━━━━━━━━━━━━━━━━━
 🆔 <b>No:</b> <code>#${rowNumber}</code>
 📛 <b>Nama:</b> <code>${itemName || 'Tanpa Nama'}</code>
-⏱ <b>Deadline:</b> <code>${deadlineStr}</code>
+⏱ <b>Deadline:</b> <code>${formattedDeadline}</code>
 ━━━━━━━━━━━━━━━━━━━━
-📢 <b>Pesan:</b> ${message}
+📢 <b>Pesan:</b> ${cleanMessage}
 ━━━━━━━━━━━━━━━━━━━━
 📅 ${formattedDate}
 
-🌐 <a href="${DASHBOARD_URL}">Lihat Dashboard Timer</a>
+🌐 <a href="${DASHBOARD_URL}">Buka Dashboard Timer</a>
             `;
 
             try {
@@ -717,7 +731,7 @@
             function checkTime() {
                 const now = new Date();
                 const wibHours = (now.getUTCHours() + 7) % 24;
-                return wibHours === 7 && now.getUTCMinutes() === 0 && now.getUTCSeconds() < 30;
+                return wibHours === 0 && now.getUTCMinutes() === 0 && now.getUTCSeconds() < 30; // 07:00 WIB (00:00 UTC)
             }
 
             function formatDuration(seconds) {
@@ -764,12 +778,36 @@
                     
                     return Object.entries(watchlist)
                         .filter(([_, item]) => item.name && item.name.trim() !== '' && !item.completed)
-                        .map(([rowNumber, item]) => ({
-                            rowNumber,
-                            name: item.name,
-                            deadline: item.deadline || null,
-                            deadlineStr: item.deadline ? formatDeadlineDate(new Date(item.deadline)) : null
-                        }));
+                        .map(([rowNumber, item]) => {
+                            const deadlineDate = item.deadline ? new Date(item.deadline) : null;
+                            const now = new Date();
+                            const timeDiff = deadlineDate ? deadlineDate - now : 0;
+                            let timeLeftText = '';
+                            
+                            if (timeDiff > 0) {
+                                const daysLeft = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+                                if (daysLeft >= 30) {
+                                    const monthsLeft = Math.floor(daysLeft / 30);
+                                    timeLeftText = `${monthsLeft} bulan${monthsLeft > 1 ? '' : ''} lagi`;
+                                } else if (daysLeft >= 7) {
+                                    const weeksLeft = Math.floor(daysLeft / 7);
+                                    timeLeftText = `${weeksLeft} minggu${weeksLeft > 1 ? '' : ''} lagi`;
+                                } else if (daysLeft >= 1) {
+                                    timeLeftText = `${daysLeft} hari${daysLeft > 1 ? '' : ''} lagi`;
+                                } else {
+                                    const hoursLeft = Math.floor(timeDiff / (1000 * 60 * 60));
+                                    timeLeftText = `${hoursLeft} jam${hoursLeft > 1 ? '' : ''} lagi`;
+                                }
+                            }
+                            
+                            return {
+                                rowNumber,
+                                name: item.name,
+                                deadline: item.deadline,
+                                deadlineStr: deadlineDate ? formatDeadlineDate(deadlineDate) : null,
+                                timeLeft: timeLeftText
+                            };
+                        });
                 } catch (error) {
                     console.error('Gagal mengambil data watchlist:', error);
                     return [];
@@ -802,7 +840,7 @@
                     timeZone: 'Asia/Jakarta'
                 });
 
-                let message = `⏰ <b>DAILY REMINDER</b> ⏰\n━━━━━━━━━━━━━━━━━━━━\n`;
+                let message = `⏰ <b>DAILY REMINDER (07:00 WIB)</b> ⏰\n━━━━━━━━━━━━━━━━━━━━\n`;
                 message += `📅 <b>Tanggal:</b> <code>${dateStr}</code>\n`;
                 message += `⏱ <b>Timer Aktif:</b> <code>${activeTimers}/${timers.length}</code>\n`;
                 message += `📝 <b>Watchlist Aktif:</b> <code>${watchlist.length}</code>\n\n`;
@@ -823,7 +861,7 @@
                     watchlist.forEach((item, index) => {
                         message += `🔔 <b>#${item.rowNumber}</b>\n`;
                         message += `├ Nama: ${item.name}\n`;
-                        message += `└ Deadline: <code>${item.deadlineStr}</code>\n\n`;
+                        message += `└ Deadline: <code>${item.deadlineStr}</code> (${item.timeLeft})\n\n`;
                     });
                 }
 
@@ -885,12 +923,12 @@
             // Untuk akses manual via console
             window.testDailyReminder = sendTestReminder;
             
-            // Jalankan pengecekan setiap 30 detik
+            // Jalankan pengecekan setiap menit
             setInterval(() => {
                 if (checkTime()) {
                     sendDailyReminder();
                 }
-            }, 30000);
+            }, 60000);
         }
 
         // ================= TIMER COMPLETION HANDLER =================
@@ -1014,258 +1052,75 @@
                 return;
             }
             
-            const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-            const hoursDiff = Math.floor(timeDiff / (1000 * 60 * 60));
-            
             watchlistIntervals[rowNumber] = [];
             
-            // Aturan reminder berdasarkan waktu yang tersisa
-            if (daysDiff <= 2) {
-                // Jika 1-2 hari: reminder 12 jam dan 6 jam sebelum deadline
-                const twelveHoursBefore = new Date(deadlineDate.getTime() - 12 * 60 * 60 * 1000);
-                const sixHoursBefore = new Date(deadlineDate.getTime() - 6 * 60 * 60 * 1000);
-                
-                if (twelveHoursBefore > now) {
-                    const timeout = twelveHoursBefore - now;
+            // Fungsi untuk mengirim reminder dengan pesan yang sesuai
+            function scheduleReminder(timeout, defaultMessage) {
+                if (timeout > 0) {
                     watchlistIntervals[rowNumber].push(
                         setTimeout(() => {
+                            // Hitung ulang sisa waktu yang akurat saat reminder dikirim
+                            const remainingTime = deadlineDate - new Date();
+                            const remainingDays = Math.floor(remainingTime / (1000 * 60 * 60 * 24));
+                            const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
+                            
+                            let accurateMessage = defaultMessage;
+                            if (remainingDays >= 30) {
+                                const monthsLeft = Math.floor(remainingDays / 30);
+                                accurateMessage = `⏳ Deadline dalam ${monthsLeft} bulan${monthsLeft > 1 ? '' : ''}!`;
+                            } else if (remainingDays >= 7) {
+                                const weeksLeft = Math.floor(remainingDays / 7);
+                                accurateMessage = `⏳ Deadline dalam ${weeksLeft} minggu${weeksLeft > 1 ? '' : ''}!`;
+                            } else if (remainingDays >= 1) {
+                                accurateMessage = `⏳ Deadline dalam ${remainingDays} hari${remainingDays > 1 ? '' : ''}!`;
+                            } else if (remainingHours >= 1) {
+                                accurateMessage = `⏳ Deadline dalam ${remainingHours} jam${remainingHours > 1 ? '' : ''}!`;
+                            }
+                            
                             sendWatchlistReminder(
                                 rowNumber,
                                 name,
                                 deadline,
-                                "⏳ Deadline dalam 12 jam!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (sixHoursBefore > now) {
-                    const timeout = sixHoursBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 6 jam!"
-                            );
-                        }, timeout)
-                    );
-                }
-            } else if (daysDiff <= 7) {
-                // Jika 3 hari - 1 minggu: reminder 2 hari, 1 hari, dan 6 jam sebelum deadline
-                const twoDaysBefore = new Date(deadlineDate.getTime() - 2 * 24 * 60 * 60 * 1000);
-                const oneDayBefore = new Date(deadlineDate.getTime() - 24 * 60 * 60 * 1000);
-                const sixHoursBefore = new Date(deadlineDate.getTime() - 6 * 60 * 60 * 1000);
-                
-                if (twoDaysBefore > now) {
-                    const timeout = twoDaysBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 2 hari!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (oneDayBefore > now) {
-                    const timeout = oneDayBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 1 hari!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (sixHoursBefore > now) {
-                    const timeout = sixHoursBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 6 jam!"
-                            );
-                        }, timeout)
-                    );
-                }
-            } else if (daysDiff <= 30) {
-                // Jika 1 minggu - 1 bulan: reminder 1 minggu pertama, 1 minggu terakhir, 2 hari, 1 hari, dan 6 jam sebelum deadline
-                const oneWeekBefore = new Date(deadlineDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-                const twoDaysBefore = new Date(deadlineDate.getTime() - 2 * 24 * 60 * 60 * 1000);
-                const oneDayBefore = new Date(deadlineDate.getTime() - 24 * 60 * 60 * 1000);
-                const sixHoursBefore = new Date(deadlineDate.getTime() - 6 * 60 * 60 * 1000);
-                
-                if (oneWeekBefore > now) {
-                    const timeout = oneWeekBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 1 minggu!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (twoDaysBefore > now) {
-                    const timeout = twoDaysBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 2 hari!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (oneDayBefore > now) {
-                    const timeout = oneDayBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 1 hari!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (sixHoursBefore > now) {
-                    const timeout = sixHoursBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 6 jam!"
-                            );
-                        }, timeout)
-                    );
-                }
-            } else {
-                // Jika lebih dari 1 bulan: reminder setiap bulan, kemudian aturan 1 bulan terakhir
-                const oneMonthBefore = new Date(deadlineDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-                const twoWeeksBefore = new Date(deadlineDate.getTime() - 14 * 24 * 60 * 60 * 1000);
-                const oneWeekBefore = new Date(deadlineDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-                const twoDaysBefore = new Date(deadlineDate.getTime() - 2 * 24 * 60 * 60 * 1000);
-                const oneDayBefore = new Date(deadlineDate.getTime() - 24 * 60 * 60 * 1000);
-                const sixHoursBefore = new Date(deadlineDate.getTime() - 6 * 60 * 60 * 1000);
-                
-                if (oneMonthBefore > now) {
-                    const timeout = oneMonthBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 1 bulan!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (twoWeeksBefore > now) {
-                    const timeout = twoWeeksBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 2 minggu!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (oneWeekBefore > now) {
-                    const timeout = oneWeekBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 1 minggu!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (twoDaysBefore > now) {
-                    const timeout = twoDaysBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 2 hari!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (oneDayBefore > now) {
-                    const timeout = oneDayBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 1 hari!"
-                            );
-                        }, timeout)
-                    );
-                }
-                
-                if (sixHoursBefore > now) {
-                    const timeout = sixHoursBefore - now;
-                    watchlistIntervals[rowNumber].push(
-                        setTimeout(() => {
-                            sendWatchlistReminder(
-                                rowNumber,
-                                name,
-                                deadline,
-                                "⏳ Deadline dalam 6 jam!"
+                                accurateMessage
                             );
                         }, timeout)
                     );
                 }
             }
+
+            // Aturan reminder berdasarkan waktu yang tersisa
+            const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+            
+            if (daysDiff <= 2) {
+                // Jika 1-2 hari: reminder 12 jam dan 6 jam sebelum deadline
+                scheduleReminder(timeDiff - (12 * 60 * 60 * 1000), "⏳ Deadline dalam 12 jam!");
+                scheduleReminder(timeDiff - (6 * 60 * 60 * 1000), "⏳ Deadline dalam 6 jam!");
+            } else if (daysDiff <= 7) {
+                // Jika 3 hari - 1 minggu: reminder 2 hari, 1 hari, dan 6 jam sebelum deadline
+                scheduleReminder(timeDiff - (2 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 2 hari!");
+                scheduleReminder(timeDiff - (24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 hari!");
+                scheduleReminder(timeDiff - (6 * 60 * 60 * 1000), "⏳ Deadline dalam 6 jam!");
+            } else if (daysDiff <= 30) {
+                // Jika 1 minggu - 1 bulan: reminder 1 minggu, 2 hari, 1 hari, dan 6 jam sebelum deadline
+                scheduleReminder(timeDiff - (7 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 minggu!");
+                scheduleReminder(timeDiff - (2 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 2 hari!");
+                scheduleReminder(timeDiff - (24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 hari!");
+                scheduleReminder(timeDiff - (6 * 60 * 60 * 1000), "⏳ Deadline dalam 6 jam!");
+            } else {
+                // Jika lebih dari 1 bulan: reminder setiap bulan, 2 minggu, 1 minggu, 2 hari, 1 hari, dan 6 jam
+                const monthsDiff = Math.floor(daysDiff / 30);
+                for (let i = monthsDiff; i >= 1; i--) {
+                    scheduleReminder(timeDiff - (i * 30 * 24 * 60 * 60 * 1000), `⏳ Deadline dalam ${i} bulan${i > 1 ? '' : ''}!`);
+                }
+                scheduleReminder(timeDiff - (14 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 2 minggu!");
+                scheduleReminder(timeDiff - (7 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 minggu!");
+                scheduleReminder(timeDiff - (2 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 2 hari!");
+                scheduleReminder(timeDiff - (24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 hari!");
+                scheduleReminder(timeDiff - (6 * 60 * 60 * 1000), "⏳ Deadline dalam 6 jam!");
+            }
             
             // Selalu kirim reminder saat deadline tiba
-            watchlistIntervals[rowNumber].push(
-                setTimeout(() => {
-                    sendWatchlistReminder(
-                        rowNumber,
-                        name,
-                        deadline,
-                        "🚨 DEADLINE SUDAH TIBA!"
-                    );
-                }, timeDiff)
-            );
+            scheduleReminder(timeDiff, "🚨 DEADLINE SUDAH TIBA!");
         }
 
         // ================= FIREBASE FUNCTIONS =================
@@ -1282,8 +1137,22 @@
 
         async function deleteTimerFromFirebase(timerId) {
             try {
+                // Hentikan interval terlebih dahulu
+                if (activeIntervals[timerId]) {
+                    clearInterval(activeIntervals[timerId]);
+                    delete activeIntervals[timerId];
+                }
+                
+                // Hapus notifikasi terkait
                 shownNotifications.delete(timerId.toString());
+                removeNotification(timerId);
+                
+                // Hapus dari Firebase
                 await database.ref('timers/' + timerId).remove();
+                
+                // Hapus state lokal
+                delete timerStates[timerId];
+                
                 console.log(`[Firebase] Timer #${timerId} berhasil dihapus`);
                 return true;
             } catch (error) {
@@ -1305,7 +1174,15 @@
 
         async function deleteWatchlistFromFirebase(itemId) {
             try {
+                // Hentikan semua reminder
+                if (watchlistIntervals[itemId]) {
+                    watchlistIntervals[itemId].forEach(interval => clearInterval(interval));
+                    delete watchlistIntervals[itemId];
+                }
+                
+                // Hapus dari Firebase
                 await database.ref('watchlist/' + itemId).remove();
+                
                 console.log(`[Firebase] Watchlist #${itemId} berhasil dihapus`);
                 return true;
             } catch (error) {
@@ -1315,52 +1192,38 @@
         }
 
         function listenForTimerChanges(callback) {
-            let debounceTimer;
+            // Hapus listener lama jika ada
+            database.ref('timers').off('value');
             
-            const handler = (snapshot) => {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                    try {
-                        const timers = snapshot.val() || {};
-                        console.log('[Firebase] Data timer diperbarui');
-                        
-                        Object.entries(timers).forEach(([rowNumber, timerData]) => {
-                            if (timerData.hasNotified) {
-                                shownNotifications.add(rowNumber);
-                            }
-                        });
-                        
-                        callback(timers);
-                    } catch (error) {
-                        console.error('[Firebase] Error dalam listener:', error);
+            const handler = async (snapshot) => {
+                const timers = snapshot.val() || {};
+                console.log('[Firebase] Data timer diperbarui');
+                
+                // Hentikan semua interval sebelum memproses data baru
+                Object.keys(activeIntervals).forEach(rowNumber => {
+                    if (!timers[rowNumber] || !timers[rowNumber].isRunning) {
+                        clearInterval(activeIntervals[rowNumber]);
+                        delete activeIntervals[rowNumber];
                     }
-                }, 500);
+                });
+
+                callback(timers);
             };
             
-            database.ref('timers').on('value', handler);
-            
-            return () => database.ref('timers').off('value', handler);
+            return database.ref('timers').on('value', handler);
         }
 
         function listenForWatchlistChanges(callback) {
-            let debounceTimer;
+            // Hapus listener lama jika ada
+            database.ref('watchlist').off('value');
             
             const handler = (snapshot) => {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                    try {
-                        const watchlist = snapshot.val() || {};
-                        console.log('[Firebase] Data watchlist diperbarui');
-                        callback(watchlist);
-                    } catch (error) {
-                        console.error('[Firebase] Error dalam listener watchlist:', error);
-                    }
-                }, 500);
+                const watchlist = snapshot.val() || {};
+                console.log('[Firebase] Data watchlist diperbarui');
+                callback(watchlist);
             };
             
-            database.ref('watchlist').on('value', handler);
-            
-            return () => database.ref('watchlist').off('value', handler);
+            return database.ref('watchlist').on('value', handler);
         }
 
         // ================= NOTIFICATION FUNCTIONS =================
@@ -1648,13 +1511,184 @@
 
             // Timer functions
             async function startTimer() {
-                removeNotification(rowNumber);
-                
-                if (timerStates[rowNumber].isRunning) return;
+                try {
+                    removeNotification(rowNumber);
+                    
+                    if (timerStates[rowNumber].isRunning) return;
 
-                let totalSeconds = timerStates[rowNumber].remainingSeconds;
-                
-                if (totalSeconds <= 0) {
+                    let totalSeconds = timerStates[rowNumber].remainingSeconds;
+                    
+                    if (totalSeconds <= 0) {
+                        const timeValue = timerInput.value;
+                        if (!timeValue) {
+                            showNotification('Peringatan', 'Silakan set waktu terlebih dahulu', 'warning');
+                            return;
+                        }
+
+                        const [hoursStr, minutesStr, secondsStr] = timeValue.split(':');
+                        const hours = parseInt(hoursStr) || 0;
+                        const minutes = parseInt(minutesStr) || 0;
+                        const seconds = parseInt(secondsStr) || 0;
+                        
+                        totalSeconds = hours * 3600 + minutes * 60 + seconds;
+
+                        if (totalSeconds <= 0) {
+                            showNotification('Peringatan', 'Masukkan waktu yang valid (HH:MM:SS)', 'warning');
+                            return;
+                        }
+                    }
+
+                    const now = new Date();
+                    const finishTime = new Date(now.getTime() + totalSeconds * 1000);
+                    const finishTimeFormatted = formatFinishTime(finishTime);
+
+                    finishTimeBox.textContent = finishTimeFormatted;
+                    finishTimeBox.classList.remove('hidden');
+
+                    const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+                    const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+                    const s = String(totalSeconds % 60).padStart(2, '0');
+                    timerDisplay.textContent = `${h}:${m}:${s}`;
+                    timerDisplay.classList.remove('hidden');
+
+                    if (activeIntervals[rowNumber]) {
+                        clearInterval(activeIntervals[rowNumber]);
+                        delete activeIntervals[rowNumber];
+                    }
+
+                    timerStates[rowNumber] = {
+                        isRunning: true,
+                        remainingSeconds: totalSeconds,
+                        finishTime: finishTime,
+                        hasNotified: false
+                    };
+
+                    activeIntervals[rowNumber] = setInterval(async () => {
+                        totalSeconds = timerStates[rowNumber].remainingSeconds;
+                        
+                        if (totalSeconds <= 0) {
+                            clearInterval(activeIntervals[rowNumber]);
+                            delete activeIntervals[rowNumber];
+                            
+                            timerStates[rowNumber].isRunning = false;
+                            timerStates[rowNumber].remainingSeconds = 0;
+                            
+                            startButton.disabled = false;
+                            startButton.classList.remove('bg-green-500', 'text-white');
+                            stopButton.disabled = true;
+                            
+                            await saveTimerToFirebase(rowNumber, {
+                                name: nameInput.value,
+                                url: urlInput.value,
+                                timer: '00:00:00',
+                                startDisabled: false,
+                                stopDisabled: true,
+                                isRunning: false,
+                                remainingSeconds: 0,
+                                finishTime: null
+                            });
+
+                            finishTimeBox.classList.add('hidden');
+
+                            await handleTimerCompletion(rowNumber, nameInput, finishTimeFormatted);
+                            
+                            return;
+                        }
+                        
+                        timerStates[rowNumber].remainingSeconds = totalSeconds - 1;
+                        const h = String(Math.floor(timerStates[rowNumber].remainingSeconds / 3600)).padStart(2, '0');
+                        const m = String(Math.floor((timerStates[rowNumber].remainingSeconds % 3600) / 60)).padStart(2, '0');
+                        const s = String(timerStates[rowNumber].remainingSeconds % 60).padStart(2, '0');
+                        timerDisplay.textContent = `${h}:${m}:${s}`;
+                        
+                        await saveTimerToFirebase(rowNumber, {
+                            timer: timerDisplay.textContent,
+                            remainingSeconds: timerStates[rowNumber].remainingSeconds,
+                            isRunning: true,
+                            timestamp: firebase.database.ServerValue.TIMESTAMP
+                        });
+                    }, 1000);
+
+                    startButton.disabled = true;
+                    startButton.classList.add('bg-green-500', 'text-white');
+                    stopButton.disabled = false;
+                    
+                    await saveTimerToFirebase(rowNumber, {
+                        name: nameInput.value,
+                        url: urlInput.value,
+                        timer: timerDisplay.textContent,
+                        timerInputValue: timerInput.value,
+                        startDisabled: true,
+                        stopDisabled: false,
+                        timerVisible: true,
+                        remainingSeconds: totalSeconds,
+                        isRunning: true,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP,
+                        finishTime: finishTime.getTime(),
+                        hasNotified: false
+                    });
+                    
+                    showNotification(
+                        'Timer Dimulai', 
+                        `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) telah dimulai\n` +
+                        `Akan selesai pada: ${finishTimeFormatted}`,
+                        'success'
+                    );
+                } catch (error) {
+                    console.error(`Error starting timer #${rowNumber}:`, error);
+                    // Reset state jika error
+                    timerStates[rowNumber].isRunning = false;
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                    showNotification('Error', `Gagal memulai timer #${rowNumber}`, 'error');
+                }
+            }
+
+            async function stopTimer() {
+                try {
+                    if (!timerStates[rowNumber].isRunning) return;
+
+                    clearInterval(activeIntervals[rowNumber]);
+                    delete activeIntervals[rowNumber];
+                    
+                    timerStates[rowNumber].isRunning = false;
+                    
+                    startButton.disabled = false;
+                    startButton.classList.remove('bg-green-500', 'text-white');
+                    stopButton.disabled = true;
+
+                    await saveTimerToFirebase(rowNumber, {
+                        name: nameInput.value,
+                        url: urlInput.value,
+                        timer: timerDisplay.textContent,
+                        startDisabled: false,
+                        stopDisabled: true,
+                        isRunning: false,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP,
+                        finishTime: timerStates[rowNumber].finishTime ? timerStates[rowNumber].finishTime.getTime() : null
+                    });
+
+                    showNotification(
+                        'Timer Dihentikan', 
+                        `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) dihentikan manual`, 
+                        'warning'
+                    );
+                } catch (error) {
+                    console.error(`Error stopping timer #${rowNumber}:`, error);
+                    showNotification('Error', `Gagal menghentikan timer #${rowNumber}`, 'error');
+                }
+            }
+
+            async function restartTimer() {
+                try {
+                    if (timerStates[rowNumber].isRunning) {
+                        await stopTimer();
+                    }
+                    
+                    // Reset status notifikasi
+                    timerStates[rowNumber].hasNotified = false;
+                    shownNotifications.delete(rowNumber);
+                    
                     const timeValue = timerInput.value;
                     if (!timeValue) {
                         showNotification('Peringatan', 'Silakan set waktu terlebih dahulu', 'warning');
@@ -1666,198 +1700,46 @@
                     const minutes = parseInt(minutesStr) || 0;
                     const seconds = parseInt(secondsStr) || 0;
                     
-                    totalSeconds = hours * 3600 + minutes * 60 + seconds;
+                    const totalSeconds = hours * 3600 + minutes * 60 + seconds;
 
                     if (totalSeconds <= 0) {
                         showNotification('Peringatan', 'Masukkan waktu yang valid (HH:MM:SS)', 'warning');
                         return;
                     }
-                }
 
-                const now = new Date();
-                const finishTime = new Date(now.getTime() + totalSeconds * 1000);
-                const finishTimeFormatted = formatFinishTime(finishTime);
-
-                finishTimeBox.textContent = finishTimeFormatted;
-                finishTimeBox.classList.remove('hidden');
-
-                const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
-                const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
-                const s = String(totalSeconds % 60).padStart(2, '0');
-                timerDisplay.textContent = `${h}:${m}:${s}`;
-                timerDisplay.classList.remove('hidden');
-
-                if (activeIntervals[rowNumber]) {
-                    clearInterval(activeIntervals[rowNumber]);
-                    delete activeIntervals[rowNumber];
-                }
-
-                timerStates[rowNumber] = {
-                    isRunning: true,
-                    remainingSeconds: totalSeconds,
-                    finishTime: finishTime,
-                    hasNotified: false
-                };
-
-                activeIntervals[rowNumber] = setInterval(async () => {
-                    totalSeconds = timerStates[rowNumber].remainingSeconds;
+                    timerStates[rowNumber].remainingSeconds = totalSeconds;
+                    timerStates[rowNumber].finishTime = null;
                     
-                    if (totalSeconds <= 0) {
-                        clearInterval(activeIntervals[rowNumber]);
-                        delete activeIntervals[rowNumber];
-                        
-                        timerStates[rowNumber].isRunning = false;
-                        timerStates[rowNumber].remainingSeconds = 0;
-                        
-                        startButton.disabled = false;
-                        startButton.classList.remove('bg-green-500', 'text-white');
-                        stopButton.disabled = true;
-                        
-                        await saveTimerToFirebase(rowNumber, {
-                            name: nameInput.value,
-                            url: urlInput.value,
-                            timer: '00:00:00',
-                            startDisabled: false,
-                            stopDisabled: true,
-                            isRunning: false,
-                            remainingSeconds: 0,
-                            finishTime: null
-                        });
-
-                        finishTimeBox.classList.add('hidden');
-
-                        await handleTimerCompletion(rowNumber, nameInput, finishTimeFormatted);
-                        
-                        return;
-                    }
-                    
-                    timerStates[rowNumber].remainingSeconds = totalSeconds - 1;
-                    const h = String(Math.floor(timerStates[rowNumber].remainingSeconds / 3600)).padStart(2, '0');
-                    const m = String(Math.floor((timerStates[rowNumber].remainingSeconds % 3600) / 60)).padStart(2, '0');
-                    const s = String(timerStates[rowNumber].remainingSeconds % 60).padStart(2, '0');
+                    const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+                    const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+                    const s = String(totalSeconds % 60).padStart(2, '0');
                     timerDisplay.textContent = `${h}:${m}:${s}`;
-                    
+                    timerDisplay.classList.remove('hidden');
+                    finishTimeBox.classList.add('hidden');
+
                     await saveTimerToFirebase(rowNumber, {
+                        name: nameInput.value,
+                        url: urlInput.value,
                         timer: timerDisplay.textContent,
-                        remainingSeconds: timerStates[rowNumber].remainingSeconds,
-                        isRunning: true,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                        timerInputValue: timerInput.value,
+                        startDisabled: false,
+                        stopDisabled: true,
+                        timerVisible: true,
+                        remainingSeconds: totalSeconds,
+                        isRunning: false,
+                        finishTime: null,
+                        hasNotified: false
                     });
-                }, 1000);
 
-                startButton.disabled = true;
-                startButton.classList.add('bg-green-500', 'text-white');
-                stopButton.disabled = false;
-                
-                await saveTimerToFirebase(rowNumber, {
-                    name: nameInput.value,
-                    url: urlInput.value,
-                    timer: timerDisplay.textContent,
-                    timerInputValue: timerInput.value,
-                    startDisabled: true,
-                    stopDisabled: false,
-                    timerVisible: true,
-                    remainingSeconds: totalSeconds,
-                    isRunning: true,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP,
-                    finishTime: finishTime.getTime(),
-                    hasNotified: false
-                });
-                
-                showNotification(
-                    'Timer Dimulai', 
-                    `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) telah dimulai\n` +
-                    `Akan selesai pada: ${finishTimeFormatted}`,
-                    'success'
-                );
-            }
-
-            async function stopTimer() {
-                if (!timerStates[rowNumber].isRunning) return;
-
-                clearInterval(activeIntervals[rowNumber]);
-                delete activeIntervals[rowNumber];
-                
-                timerStates[rowNumber].isRunning = false;
-                
-                startButton.disabled = false;
-                startButton.classList.remove('bg-green-500', 'text-white');
-                stopButton.disabled = true;
-
-                await saveTimerToFirebase(rowNumber, {
-                    name: nameInput.value,
-                    url: urlInput.value,
-                    timer: timerDisplay.textContent,
-                    startDisabled: false,
-                    stopDisabled: true,
-                    isRunning: false,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP,
-                    finishTime: timerStates[rowNumber].finishTime ? timerStates[rowNumber].finishTime.getTime() : null
-                });
-
-                showNotification(
-                    'Timer Dihentikan', 
-                    `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) dihentikan manual`, 
-                    'warning'
-                );
-            }
-
-            async function restartTimer() {
-                if (timerStates[rowNumber].isRunning) {
-                    await stopTimer();
+                    showNotification(
+                        'Timer Diulang', 
+                        `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) telah diulang ke waktu awal`,
+                        'success'
+                    );
+                } catch (error) {
+                    console.error(`Error restarting timer #${rowNumber}:`, error);
+                    showNotification('Error', `Gagal merestart timer #${rowNumber}`, 'error');
                 }
-                
-                // Reset status notifikasi
-                timerStates[rowNumber].hasNotified = false;
-                shownNotifications.delete(rowNumber);
-                
-                const timeValue = timerInput.value;
-                if (!timeValue) {
-                    showNotification('Peringatan', 'Silakan set waktu terlebih dahulu', 'warning');
-                    return;
-                }
-
-                const [hoursStr, minutesStr, secondsStr] = timeValue.split(':');
-                const hours = parseInt(hoursStr) || 0;
-                const minutes = parseInt(minutesStr) || 0;
-                const seconds = parseInt(secondsStr) || 0;
-                
-                const totalSeconds = hours * 3600 + minutes * 60 + seconds;
-
-                if (totalSeconds <= 0) {
-                    showNotification('Peringatan', 'Masukkan waktu yang valid (HH:MM:SS)', 'warning');
-                    return;
-                }
-
-                timerStates[rowNumber].remainingSeconds = totalSeconds;
-                timerStates[rowNumber].finishTime = null;
-                
-                const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
-                const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
-                const s = String(totalSeconds % 60).padStart(2, '0');
-                timerDisplay.textContent = `${h}:${m}:${s}`;
-                timerDisplay.classList.remove('hidden');
-                finishTimeBox.classList.add('hidden');
-
-                await saveTimerToFirebase(rowNumber, {
-                    name: nameInput.value,
-                    url: urlInput.value,
-                    timer: timerDisplay.textContent,
-                    timerInputValue: timerInput.value,
-                    startDisabled: false,
-                    stopDisabled: true,
-                    timerVisible: true,
-                    remainingSeconds: totalSeconds,
-                    isRunning: false,
-                    finishTime: null,
-                    hasNotified: false
-                });
-
-                showNotification(
-                    'Timer Diulang', 
-                    `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) telah diulang ke waktu awal`,
-                    'success'
-                );
             }
 
             // Event listeners
@@ -1881,47 +1763,58 @@
                 });
 
                 if (isConfirmed) {
-                    removeNotification(rowNumber);
-                    
-                    if (activeIntervals[rowNumber]) {
-                        clearInterval(activeIntervals[rowNumber]);
-                        delete activeIntervals[rowNumber];
+                    try {
+                        // Hapus dari Firebase terlebih dahulu
+                        await deleteTimerFromFirebase(rowNumber);
+                        
+                        // Baru hapus dari UI
+                        row.remove();
+                        updateRowNumbers();
+                        
+                        showNotification(
+                            'Berhasil', 
+                            `Timer #${rowNumber} telah dihapus`, 
+                            'success'
+                        );
+                    } catch (error) {
+                        console.error(`Error deleting timer #${rowNumber}:`, error);
+                        showNotification('Error', `Gagal menghapus timer #${rowNumber}`, 'error');
                     }
-                    
-                    delete timerStates[rowNumber];
-                    shownNotifications.delete(rowNumber);
-                    await deleteTimerFromFirebase(rowNumber);
-                    row.remove();
-                    updateRowNumbers();
-                    
-                    showNotification(
-                        'Berhasil', 
-                        `Timer #${rowNumber} telah dihapus`, 
-                        'success'
-                    );
                 }
             });
 
             nameInput.addEventListener('input', async () => {
-                updateNameDisplay();
-                await saveTimerToFirebase(rowNumber, {
-                    name: nameInput.value,
-                    url: urlInput.value
-                });
+                try {
+                    updateNameDisplay();
+                    await saveTimerToFirebase(rowNumber, {
+                        name: nameInput.value,
+                        url: urlInput.value
+                    });
+                } catch (error) {
+                    console.error(`Error updating name for timer #${rowNumber}:`, error);
+                }
             });
 
             urlInput.addEventListener('input', async () => {
-                updateNameDisplay();
-                await saveTimerToFirebase(rowNumber, {
-                    name: nameInput.value,
-                    url: urlInput.value
-                });
+                try {
+                    updateNameDisplay();
+                    await saveTimerToFirebase(rowNumber, {
+                        name: nameInput.value,
+                        url: urlInput.value
+                    });
+                } catch (error) {
+                    console.error(`Error updating URL for timer #${rowNumber}:`, error);
+                }
             });
 
             timerInput.addEventListener('change', async () => {
-                await saveTimerToFirebase(rowNumber, {
-                    timerInputValue: timerInput.value
-                });
+                try {
+                    await saveTimerToFirebase(rowNumber, {
+                        timerInputValue: timerInput.value
+                    });
+                } catch (error) {
+                    console.error(`Error updating timer input for #${rowNumber}:`, error);
+                }
             });
         }
 
@@ -1973,82 +1866,98 @@
 
             // Event listener for deadline input
             deadlineInput.addEventListener('change', async () => {
-                if (deadlineInput.value) {
-                    const deadlineDate = new Date(deadlineInput.value);
-                    updateDeadlineBox(deadlineDate);
-                    
-                    await saveWatchlistToFirebase(rowNumber, {
-                        name: nameInput.value,
-                        deadline: deadlineDate.getTime(),
-                        completed: false
-                    });
-                    
-                    // Jadwalkan reminder baru
-                    scheduleWatchlistReminders(rowNumber, nameInput.value, deadlineDate.getTime());
+                try {
+                    if (deadlineInput.value) {
+                        const deadlineDate = new Date(deadlineInput.value);
+                        updateDeadlineBox(deadlineDate);
+                        
+                        await saveWatchlistToFirebase(rowNumber, {
+                            name: nameInput.value,
+                            deadline: deadlineDate.getTime(),
+                            completed: false
+                        });
+                        
+                        // Jadwalkan reminder baru
+                        scheduleWatchlistReminders(rowNumber, nameInput.value, deadlineDate.getTime());
+                    }
+                } catch (error) {
+                    console.error(`Error updating deadline for watchlist #${rowNumber}:`, error);
+                    showNotification('Error', `Gagal mengupdate deadline untuk #${rowNumber}`, 'error');
                 }
             });
 
             // Event listener for name input
             nameInput.addEventListener('input', async () => {
-                await saveWatchlistToFirebase(rowNumber, {
-                    name: nameInput.value
-                });
+                try {
+                    await saveWatchlistToFirebase(rowNumber, {
+                        name: nameInput.value
+                    });
+                } catch (error) {
+                    console.error(`Error updating name for watchlist #${rowNumber}:`, error);
+                }
             });
 
             // Event listener for complete button
             completeButton.addEventListener('click', async () => {
-                const { isConfirmed } = await Swal.fire({
-                    title: 'Konfirmasi Selesai',
-                    html: `Yakin ingin menandai <b>Watchlist #${rowNumber}</b> (${nameInput.value || 'Tanpa Nama'}) sebagai selesai?`,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#10b981',
-                    cancelButtonColor: '#6b7280',
-                    confirmButtonText: 'Ya, Selesai!',
-                    cancelButtonText: 'Batal',
-                    width: '500px',
-                    background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#fff',
-                    color: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#333'
-                });
+                try {
+                    const { isConfirmed } = await Swal.fire({
+                        title: 'Konfirmasi Selesai',
+                        html: `Yakin ingin menandai <b>Watchlist #${rowNumber}</b> (${nameInput.value || 'Tanpa Nama'}) sebagai selesai?`,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#10b981',
+                        cancelButtonColor: '#6b7280',
+                        confirmButtonText: 'Ya, Selesai!',
+                        cancelButtonText: 'Batal',
+                        width: '500px',
+                        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#fff',
+                        color: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#333'
+                    });
 
-                if (isConfirmed) {
-                    await handleWatchlistCompletion(rowNumber, nameInput);
-                    completeButton.disabled = true;
+                    if (isConfirmed) {
+                        await handleWatchlistCompletion(rowNumber, nameInput);
+                        completeButton.disabled = true;
+                    }
+                } catch (error) {
+                    console.error(`Error completing watchlist #${rowNumber}:`, error);
+                    showNotification('Error', `Gagal menandai watchlist #${rowNumber} sebagai selesai`, 'error');
                 }
             });
 
             // Event listener for delete button
             deleteButton.addEventListener('click', async () => {
-                const { isConfirmed } = await Swal.fire({
-                    title: 'Konfirmasi Hapus',
-                    html: `Yakin ingin menghapus <b>Watchlist #${rowNumber}</b> (${nameInput.value || 'Tanpa Nama'})?`,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#3085d6',
-                    confirmButtonText: 'Ya, Hapus!',
-                    cancelButtonText: 'Batal',
-                    width: '500px',
-                    background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#fff',
-                    color: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#333'
-                });
+                try {
+                    const { isConfirmed } = await Swal.fire({
+                        title: 'Konfirmasi Hapus',
+                        html: `Yakin ingin menghapus <b>Watchlist #${rowNumber}</b> (${nameInput.value || 'Tanpa Nama'})?`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#3085d6',
+                        confirmButtonText: 'Ya, Hapus!',
+                        cancelButtonText: 'Batal',
+                        width: '500px',
+                        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#fff',
+                        color: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#333'
+                    });
 
-                if (isConfirmed) {
-                    // Hentikan semua reminder
-                    if (watchlistIntervals[rowNumber]) {
-                        watchlistIntervals[rowNumber].forEach(interval => clearInterval(interval));
-                        delete watchlistIntervals[rowNumber];
+                    if (isConfirmed) {
+                        // Hapus dari Firebase terlebih dahulu
+                        await deleteWatchlistFromFirebase(rowNumber);
+                        
+                        // Baru hapus dari UI
+                        row.remove();
+                        updateWatchlistRowNumbers();
+                        
+                        showNotification(
+                            'Berhasil', 
+                            `Watchlist #${rowNumber} telah dihapus`, 
+                            'success'
+                        );
                     }
-                    
-                    await deleteWatchlistFromFirebase(rowNumber);
-                    row.remove();
-                    updateWatchlistRowNumbers();
-                    
-                    showNotification(
-                        'Berhasil', 
-                        `Watchlist #${rowNumber} telah dihapus`, 
-                        'success'
-                    );
+                } catch (error) {
+                    console.error(`Error deleting watchlist #${rowNumber}:`, error);
+                    showNotification('Error', `Gagal menghapus watchlist #${rowNumber}`, 'error');
                 }
             });
         }
@@ -2099,6 +2008,18 @@
 
         // ================= INITIALIZATION =================
         document.addEventListener('DOMContentLoaded', function() {
+            // Clean up any existing intervals
+            Object.values(activeIntervals).forEach(interval => clearInterval(interval));
+            Object.values(watchlistIntervals).forEach(intervals => {
+                intervals.forEach(interval => clearInterval(interval));
+            });
+            
+            // Reset states
+            activeIntervals = {};
+            watchlistIntervals = {};
+            timerStates = {};
+            shownNotifications.clear();
+
             // Periksa token bot
             if (!BOT_TOKEN || BOT_TOKEN.includes('TOKEN_BOT_ANDA')) {
                 console.error("Token bot belum dikonfigurasi dengan benar");
