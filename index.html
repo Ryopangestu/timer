@@ -605,11 +605,16 @@
             }
 
             async function sendDailyReminder() {
-                if (!checkTime()) return;
+                console.log('[Daily Reminder] Memulai proses pengiriman...');
+                
+                if (!BOT_TOKEN || !CHAT_ID) {
+                    console.error('Token bot atau chat ID tidak valid');
+                    return;
+                }
 
                 const timers = await getTimersForReminder();
                 if (timers.length === 0) {
-                    console.log('Tidak ada timer untuk dikirim sebagai reminder');
+                    console.log('[Daily Reminder] Tidak ada timer untuk dikirim');
                     return;
                 }
 
@@ -640,6 +645,7 @@
                 message += `🌐 <a href="${DASHBOARD_URL}">Buka Dashboard Timer</a>`;
 
                 try {
+                    console.log('[Daily Reminder] Mengirim pesan ke Telegram...');
                     const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -651,16 +657,54 @@
                         })
                     });
 
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    
-                    console.log('Daily reminder berhasil dikirim:', new Date().toLocaleString());
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (!data.ok) {
+                        throw new Error(`API error: ${JSON.stringify(data)}`);
+                    }
+
+                    console.log('[Daily Reminder] Berhasil dikirim:', new Date().toLocaleString());
+                    showNotification('Berhasil', 'Daily reminder berhasil dikirim', 'success');
+                    return true;
                 } catch (error) {
-                    console.error('Gagal mengirim daily reminder:', error);
+                    console.error('[Daily Reminder] Gagal mengirim:', error);
+                    showNotification('Gagal', 'Daily reminder gagal dikirim', 'error');
+                    return false;
                 }
             }
 
-            setInterval(sendDailyReminder, 30000);
-            window.testDailyReminder = sendDailyReminder;
+            // Fungsi untuk testing manual
+            async function sendTestReminder() {
+                const { isConfirmed } = await Swal.fire({
+                    title: 'Test Daily Reminder',
+                    text: 'Yakin ingin mengirim test reminder sekarang?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya',
+                    cancelButtonText: 'Batal'
+                });
+                
+                if (isConfirmed) {
+                    console.log('[Test] Memulai test daily reminder...');
+                    await sendDailyReminder();
+                }
+            }
+
+            // Pasang event listener untuk tombol test
+            document.getElementById('test-reminder-btn').addEventListener('click', sendTestReminder);
+            
+            // Untuk akses manual via console
+            window.testDailyReminder = sendTestReminder;
+            
+            // Jalankan pengecekan setiap 30 detik
+            setInterval(() => {
+                if (checkTime()) {
+                    sendDailyReminder();
+                }
+            }, 30000);
         }
 
         // ================= TIMER COMPLETION HANDLER =================
@@ -1453,18 +1497,6 @@
             document.getElementById('add-row-btn').addEventListener('click', addNewRow);
             document.getElementById('wib-to-utc').addEventListener('click', convertWIBtoUTC);
             document.getElementById('utc-to-wib').addEventListener('click', convertUTCtoWIB);
-            document.getElementById('test-reminder-btn').addEventListener('click', () => {
-                Swal.fire({
-                    title: 'Test Daily Reminder',
-                    text: 'Kirim reminder sekarang?',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ya',
-                    cancelButtonText: 'Batal'
-                }).then(({ isConfirmed }) => {
-                    if (isConfirmed) window.testDailyReminder();
-                });
-            });
             
             // Set waktu awal
             const now = new Date();
