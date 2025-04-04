@@ -460,6 +460,9 @@
         const timerStates = {};
         const notificationDebouncers = {};
         const watchlistIntervals = {};
+        let isInitialLoad = true;
+        let timerUnsubscribe = null;
+        let watchlistUnsubscribe = null;
 
         // ================= UTILITY FUNCTIONS =================
         function showNotification(title, message, icon = 'info', timer = 3000) {
@@ -883,7 +886,7 @@
             document.getElementById('test-reminder-btn').addEventListener('click', sendTestReminder);
             
             // Untuk akses manual via console
-            window.testDailyReminder = sendTestReminder;
+            window.testDailyReminder = sendDailyReminder;
             
             // Jalankan pengecekan setiap 30 detik
             setInterval(() => {
@@ -1088,7 +1091,11 @@
         // ================= FIREBASE FUNCTIONS =================
         async function saveTimerToFirebase(timerId, data) {
             try {
-                await database.ref('timers/' + timerId).update(data);
+                const updateData = {
+                    ...data,
+                    lastUpdated: firebase.database.ServerValue.TIMESTAMP
+                };
+                await database.ref('timers/' + timerId).update(updateData);
                 console.log(`[Firebase] Data timer #${timerId} berhasil disimpan`);
                 return true;
             } catch (error) {
@@ -1099,8 +1106,20 @@
 
         async function deleteTimerFromFirebase(timerId) {
             try {
-                shownNotifications.delete(timerId.toString());
                 await database.ref('timers/' + timerId).remove();
+                
+                // Hapus dari state lokal
+                shownNotifications.delete(timerId.toString());
+                
+                if (activeIntervals[timerId]) {
+                    clearInterval(activeIntervals[timerId]);
+                    delete activeIntervals[timerId];
+                }
+                
+                if (timerStates[timerId]) {
+                    delete timerStates[timerId];
+                }
+                
                 console.log(`[Firebase] Timer #${timerId} berhasil dihapus`);
                 return true;
             } catch (error) {
@@ -1111,7 +1130,11 @@
 
         async function saveWatchlistToFirebase(itemId, data) {
             try {
-                await database.ref('watchlist/' + itemId).update(data);
+                const updateData = {
+                    ...data,
+                    lastUpdated: firebase.database.ServerValue.TIMESTAMP
+                };
+                await database.ref('watchlist/' + itemId).update(updateData);
                 console.log(`[Firebase] Data watchlist #${itemId} berhasil disimpan`);
                 return true;
             } catch (error) {
@@ -1516,6 +1539,21 @@
                     hasNotified: false
                 };
 
+                // Save to Firebase before starting interval
+                await saveTimerToFirebase(rowNumber, {
+                    name: nameInput.value,
+                    url: urlInput.value,
+                    timer: timerDisplay.textContent,
+                    timerInputValue: timerInput.value,
+                    startDisabled: true,
+                    stopDisabled: false,
+                    timerVisible: true,
+                    remainingSeconds: totalSeconds,
+                    isRunning: true,
+                    finishTime: finishTime.getTime(),
+                    hasNotified: false
+                });
+
                 activeIntervals[rowNumber] = setInterval(async () => {
                     totalSeconds = timerStates[rowNumber].remainingSeconds;
                     
@@ -1531,8 +1569,6 @@
                         stopButton.disabled = true;
                         
                         await saveTimerToFirebase(rowNumber, {
-                            name: nameInput.value,
-                            url: urlInput.value,
                             timer: '00:00:00',
                             startDisabled: false,
                             stopDisabled: true,
@@ -1554,32 +1590,17 @@
                     const s = String(timerStates[rowNumber].remainingSeconds % 60).padStart(2, '0');
                     timerDisplay.textContent = `${h}:${m}:${s}`;
                     
+                    // Update Firebase every second with latest timestamp
                     await saveTimerToFirebase(rowNumber, {
                         timer: timerDisplay.textContent,
                         remainingSeconds: timerStates[rowNumber].remainingSeconds,
-                        isRunning: true,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                        isRunning: true
                     });
                 }, 1000);
 
                 startButton.disabled = true;
                 startButton.classList.add('bg-green-500', 'text-white');
                 stopButton.disabled = false;
-                
-                await saveTimerToFirebase(rowNumber, {
-                    name: nameInput.value,
-                    url: urlInput.value,
-                    timer: timerDisplay.textContent,
-                    timerInputValue: timerInput.value,
-                    startDisabled: true,
-                    stopDisabled: false,
-                    timerVisible: true,
-                    remainingSeconds: totalSeconds,
-                    isRunning: true,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP,
-                    finishTime: finishTime.getTime(),
-                    hasNotified: false
-                });
                 
                 showNotification(
                     'Timer Dimulai', 
@@ -1608,7 +1629,6 @@
                     startDisabled: false,
                     stopDisabled: true,
                     isRunning: false,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP,
                     finishTime: timerStates[rowNumber].finishTime ? timerStates[rowNumber].finishTime.getTime() : null
                 });
 
@@ -1624,7 +1644,7 @@
                     await stopTimer();
                 }
                 
-                // Reset status notifikasi
+                // Reset notification status
                 timerStates[rowNumber].hasNotified = false;
                 shownNotifications.delete(rowNumber);
                 
@@ -1758,14 +1778,14 @@
                 deadlineInput.value = newDeadline.toISOString().slice(0, 16);
                 updateDeadlineBox(newDeadline);
                 
-                // Simpan ke Firebase
+                // Save to Firebase
                 saveWatchlistToFirebase(rowNumber, {
                     name: nameInput.value,
                     deadline: newDeadline.getTime(),
                     completed: false
                 });
                 
-                // Jadwalkan reminder
+                // Schedule reminders
                 scheduleWatchlistReminders(rowNumber, nameInput.value, newDeadline.getTime());
             }
 
@@ -1800,7 +1820,7 @@
                         completed: false
                     });
                     
-                    // Jadwalkan reminder baru
+                    // Schedule new reminders
                     scheduleWatchlistReminders(rowNumber, nameInput.value, deadlineDate.getTime());
                 }
             });
@@ -1851,7 +1871,7 @@
                 });
 
                 if (isConfirmed) {
-                    // Hentikan semua reminder
+                    // Stop all reminders
                     if (watchlistIntervals[rowNumber]) {
                         watchlistIntervals[rowNumber].forEach(interval => clearInterval(interval));
                         delete watchlistIntervals[rowNumber];
@@ -1916,7 +1936,7 @@
 
         // ================= INITIALIZATION =================
         document.addEventListener('DOMContentLoaded', function() {
-            // Periksa token bot
+            // Check bot token
             if (!BOT_TOKEN || BOT_TOKEN.includes('TOKEN_BOT_ANDA')) {
                 console.error("Token bot belum dikonfigurasi dengan benar");
                 showNotification(
@@ -1928,26 +1948,55 @@
             }
 
             // Setup Firebase listeners
-            const unsubscribeTimer = listenForTimerChanges((timers) => {
+            timerUnsubscribe = listenForTimerChanges((timers) => {
                 const tableBody = document.querySelector('#timer-table tbody');
-                tableBody.innerHTML = '';
                 
+                // Skip update if this is initial load
+                if (isInitialLoad) {
+                    isInitialLoad = false;
+                    return;
+                }
+                
+                // Only update if really needed
+                const currentRows = Array.from(tableBody.querySelectorAll('tr')).map(row => 
+                    row.querySelector('td').textContent
+                );
+                const firebaseRows = timers ? Object.keys(timers) : [];
+                
+                // Remove rows not in Firebase
+                currentRows.forEach(rowNumber => {
+                    if (!firebaseRows.includes(rowNumber)) {
+                        const rowToRemove = tableBody.querySelector(`tr td:first-child:contains(${rowNumber})`)?.closest('tr');
+                        if (rowToRemove) {
+                            rowToRemove.remove();
+                        }
+                    }
+                });
+                
+                // Add/update rows from Firebase
                 if (timers) {
                     Object.entries(timers).forEach(([rowNumber, timerData]) => {
-                        const newRow = createNewRow(rowNumber, timerData);
-                        tableBody.appendChild(newRow);
-                        addEventListenersToRow(newRow);
+                        let row = tableBody.querySelector(`tr td:first-child:contains(${rowNumber})`)?.closest('tr');
                         
+                        if (!row) {
+                            row = createNewRow(rowNumber, timerData);
+                            tableBody.appendChild(row);
+                            addEventListenersToRow(row);
+                        }
+                        
+                        // Update timer state
                         if (timerData.isRunning) {
-                            const timerDisplay = newRow.querySelector('.timer-display-box');
-                            const startButton = newRow.querySelector('.start-btn');
-                            const stopButton = newRow.querySelector('.stop-btn');
-                            const finishTimeBox = newRow.querySelector('.finish-time-box');
+                            const timerDisplay = row.querySelector('.timer-display-box');
+                            const startButton = row.querySelector('.start-btn');
+                            const stopButton = row.querySelector('.stop-btn');
+                            const finishTimeBox = row.querySelector('.finish-time-box');
                             
-                            const timeElapsed = timerData.timestamp ? 
-                                Math.floor((Date.now() - timerData.timestamp) / 1000) : 0;
+                            // Calculate time elapsed since lastUpdated
+                            const timeElapsed = timerData.lastUpdated ? 
+                                Math.floor((Date.now() - timerData.lastUpdated) / 1000) : 0;
                             let remainingSeconds = Math.max(0, (timerData.remainingSeconds || 0) - timeElapsed);
                             
+                            // Update local state
                             timerStates[rowNumber] = {
                                 isRunning: true,
                                 remainingSeconds: remainingSeconds,
@@ -1955,6 +2004,7 @@
                                 hasNotified: timerData.hasNotified || false
                             };
                             
+                            // Update UI
                             startButton.disabled = true;
                             startButton.classList.add('bg-green-500', 'text-white');
                             stopButton.disabled = false;
@@ -1964,88 +2014,73 @@
                                 finishTimeBox.classList.remove('hidden');
                             }
                             
-                            const updateTimer = async () => {
-                                if (remainingSeconds <= 0) {
-                                    clearInterval(activeIntervals[rowNumber]);
-                                    delete activeIntervals[rowNumber];
+                            // Only start interval if not already running
+                            if (!activeIntervals[rowNumber]) {
+                                const updateTimer = async () => {
+                                    if (remainingSeconds <= 0) {
+                                        clearInterval(activeIntervals[rowNumber]);
+                                        delete activeIntervals[rowNumber];
+                                        
+                                        timerStates[rowNumber].isRunning = false;
+                                        timerStates[rowNumber].remainingSeconds = 0;
+                                        
+                                        await saveTimerToFirebase(rowNumber, {
+                                            isRunning: false,
+                                            remainingSeconds: 0,
+                                            finishTime: null
+                                        });
+
+                                        finishTimeBox.classList.add('hidden');
+
+                                        await handleTimerCompletion(
+                                            rowNumber, 
+                                            row.querySelector('.name-input'),
+                                            formatFinishTime(new Date(timerData.finishTime))
+                                        );
+                                        
+                                        return;
+                                    }
                                     
-                                    timerStates[rowNumber].isRunning = false;
-                                    timerStates[rowNumber].remainingSeconds = 0;
+                                    timerStates[rowNumber].remainingSeconds = remainingSeconds - 1;
+                                    const h = String(Math.floor(timerStates[rowNumber].remainingSeconds / 3600)).padStart(2, '0');
+                                    const m = String(Math.floor((timerStates[rowNumber].remainingSeconds % 3600) / 60)).padStart(2, '0');
+                                    const s = String(timerStates[rowNumber].remainingSeconds % 60).padStart(2, '0');
+                                    timerDisplay.textContent = `${h}:${m}:${s}`;
+                                    remainingSeconds--;
                                     
                                     await saveTimerToFirebase(rowNumber, {
-                                        isRunning: false,
-                                        remainingSeconds: 0,
-                                        finishTime: null
+                                        remainingSeconds: timerStates[rowNumber].remainingSeconds,
+                                        isRunning: true
                                     });
-
-                                    finishTimeBox.classList.add('hidden');
-
-                                    await handleTimerCompletion(
-                                        rowNumber, 
-                                        newRow.querySelector('.name-input'),
-                                        formatFinishTime(new Date(timerData.finishTime))
-                                    );
-                                    
-                                    return;
-                                }
+                                };
                                 
-                                timerStates[rowNumber].remainingSeconds = remainingSeconds - 1;
-                                const h = String(Math.floor(timerStates[rowNumber].remainingSeconds / 3600)).padStart(2, '0');
-                                const m = String(Math.floor((timerStates[rowNumber].remainingSeconds % 3600) / 60)).padStart(2, '0');
-                                const s = String(timerStates[rowNumber].remainingSeconds % 60).padStart(2, '0');
+                                const h = String(Math.floor(remainingSeconds / 3600)).padStart(2, '0');
+                                const m = String(Math.floor((remainingSeconds % 3600) / 60)).padStart(2, '0');
+                                const s = String(remainingSeconds % 60).padStart(2, '0');
                                 timerDisplay.textContent = `${h}:${m}:${s}`;
-                                remainingSeconds--;
+                                timerDisplay.classList.remove('hidden');
                                 
-                                await saveTimerToFirebase(rowNumber, {
-                                    remainingSeconds: timerStates[rowNumber].remainingSeconds,
-                                    isRunning: true,
-                                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                                });
-                            };
-                            
-                            const h = String(Math.floor(remainingSeconds / 3600)).padStart(2, '0');
-                            const m = String(Math.floor((remainingSeconds % 3600) / 60)).padStart(2, '0');
-                            const s = String(remainingSeconds % 60).padStart(2, '0');
-                            timerDisplay.textContent = `${h}:${m}:${s}`;
-                            timerDisplay.classList.remove('hidden');
-                            
-                            activeIntervals[rowNumber] = setInterval(updateTimer, 1000);
-                        } else if (timerData.remainingSeconds > 0) {
-                            timerStates[rowNumber] = {
-                                isRunning: false,
-                                remainingSeconds: timerData.remainingSeconds,
-                                finishTime: timerData.finishTime ? new Date(timerData.finishTime) : null,
-                                hasNotified: timerData.hasNotified || false
-                            };
-                            
-                            const timerDisplay = newRow.querySelector('.timer-display-box');
-                            const h = String(Math.floor(timerData.remainingSeconds / 3600)).padStart(2, '0');
-                            const m = String(Math.floor((timerData.remainingSeconds % 3600) / 60)).padStart(2, '0');
-                            const s = String(timerData.remainingSeconds % 60).padStart(2, '0');
-                            timerDisplay.textContent = `${h}:${m}:${s}`;
-                            timerDisplay.classList.remove('hidden');
-                            
-                            if (timerData.finishTime) {
-                                const finishTimeBox = newRow.querySelector('.finish-time-box');
-                                finishTimeBox.textContent = formatFinishTime(new Date(timerData.finishTime));
-                                finishTimeBox.classList.remove('hidden');
+                                activeIntervals[rowNumber] = setInterval(updateTimer, 1000);
                             }
                         }
                     });
                 }
             });
 
-            const unsubscribeWatchlist = listenForWatchlistChanges((watchlist) => {
+            watchlistUnsubscribe = listenForWatchlistChanges((watchlist) => {
                 const tableBody = document.querySelector('#watchlist-table tbody');
-                tableBody.innerHTML = '';
                 
                 if (watchlist) {
                     Object.entries(watchlist).forEach(([rowNumber, watchlistData]) => {
-                        const newRow = createNewWatchlistRow(rowNumber, watchlistData);
-                        tableBody.appendChild(newRow);
-                        addEventListenersToWatchlistRow(newRow);
+                        let row = tableBody.querySelector(`tr td:first-child:contains(${rowNumber})`)?.closest('tr');
                         
-                        // Jika ada deadline dan belum selesai, jadwalkan reminder
+                        if (!row) {
+                            row = createNewWatchlistRow(rowNumber, watchlistData);
+                            tableBody.appendChild(row);
+                            addEventListenersToWatchlistRow(row);
+                        }
+                        
+                        // If there's a deadline and not completed, schedule reminders
                         if (watchlistData.deadline && !watchlistData.completed) {
                             scheduleWatchlistReminders(
                                 rowNumber, 
@@ -2063,7 +2098,7 @@
             document.getElementById('wib-to-utc').addEventListener('click', convertWIBtoUTC);
             document.getElementById('utc-to-wib').addEventListener('click', convertUTCtoWIB);
             
-            // Set waktu awal
+            // Set initial time
             const now = new Date();
             const wibTimeInput = document.getElementById('wib-time');
             wibTimeInput.value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
@@ -2075,10 +2110,10 @@
             // Setup daily reminder
             setupDailyReminder();
 
-            // Cleanup saat halaman ditutup
+            // Cleanup when page is closed
             window.addEventListener('beforeunload', () => {
-                unsubscribeTimer();
-                unsubscribeWatchlist();
+                if (timerUnsubscribe) timerUnsubscribe();
+                if (watchlistUnsubscribe) watchlistUnsubscribe();
                 Object.values(activeIntervals).forEach(interval => clearInterval(interval));
                 Object.values(watchlistIntervals).forEach(intervals => {
                     intervals.forEach(interval => clearInterval(interval));
