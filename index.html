@@ -11,6 +11,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
     <style>
+        /* CSS Styles */
         .btn:active {
             transform: scale(0.95);
         }
@@ -1308,7 +1309,7 @@
 
         async function saveWatchlistToFirebase(itemId, data) {
             try {
-                await database.ref('watchlist/' + itemId).update(data);
+                await database.ref('watchlist/' + itemId).set(data);
                 console.log(`[Firebase] Data watchlist #${itemId} berhasil disimpan`);
                 return true;
             } catch (error) {
@@ -1539,7 +1540,8 @@
                 timerVisible: false,
                 isRunning: false,
                 remainingSeconds: 0,
-                hasNotified: false
+                hasNotified: false,
+                createdAt: firebase.database.ServerValue.TIMESTAMP
             });
             
             showNotification('Berhasil', `Timer baru (#${rowCount}) telah ditambahkan`, 'success');
@@ -1548,14 +1550,20 @@
         function addNewWatchlistRow() {
             const tableBody = document.querySelector('#watchlist-table tbody');
             const rowCount = tableBody.querySelectorAll('tr').length + 1;
+            
+            // Buat ID unik menggunakan push()
+            const newItemRef = database.ref('watchlist').push();
+            const rowNumber = newItemRef.key;
+            
             const newRow = createNewWatchlistRow(rowCount);
             tableBody.appendChild(newRow);
-            addEventListenersToWatchlistRow(newRow);
+            addEventListenersToWatchlistRow(newRow, rowNumber);
             
-            saveWatchlistToFirebase(rowCount, {
+            saveWatchlistToFirebase(rowNumber, {
                 name: '',
                 deadline: null,
-                completed: false
+                completed: false,
+                createdAt: firebase.database.ServerValue.TIMESTAMP
             });
             
             showNotification('Berhasil', `Watchlist baru (#${rowCount}) telah ditambahkan`, 'success');
@@ -1758,14 +1766,14 @@
             });
         }
 
-        function addEventListenersToWatchlistRow(row) {
+        function addEventListenersToWatchlistRow(row, rowNumber) {
             const nameInput = row.querySelector('.name-input');
             const deadlineInput = row.querySelector('.deadline-input');
             const completeButton = row.querySelector('.complete-btn');
             const deleteButton = row.querySelector('.delete-btn');
             const presetButtons = row.querySelectorAll('.preset-deadline-btn');
             const deadlineBox = row.querySelector('.deadline-box');
-            const rowNumber = row.querySelector('td').textContent;
+            const displayRowNumber = row.querySelector('td').textContent;
 
             // Set deadline to now + preset hours
             function setPresetDeadline(hours) {
@@ -1832,7 +1840,7 @@
             completeButton.addEventListener('click', async () => {
                 const { isConfirmed } = await Swal.fire({
                     title: 'Konfirmasi Selesai',
-                    html: `Yakin ingin menandai <b>Watchlist #${rowNumber}</b> (${nameInput.value || 'Tanpa Nama'}) sebagai selesai?`,
+                    html: `Yakin ingin menandai <b>Watchlist #${displayRowNumber}</b> (${nameInput.value || 'Tanpa Nama'}) sebagai selesai?`,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonColor: '#10b981',
@@ -1854,7 +1862,7 @@
             deleteButton.addEventListener('click', async () => {
                 const { isConfirmed } = await Swal.fire({
                     title: 'Konfirmasi Hapus',
-                    html: `Yakin ingin menghapus <b>Watchlist #${rowNumber}</b> (${nameInput.value || 'Tanpa Nama'})?`,
+                    html: `Yakin ingin menghapus <b>Watchlist #${displayRowNumber}</b> (${nameInput.value || 'Tanpa Nama'})?`,
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#d33',
@@ -1879,7 +1887,7 @@
                     
                     showNotification(
                         'Berhasil', 
-                        `Watchlist #${rowNumber} telah dihapus`, 
+                        `Watchlist #${displayRowNumber} telah dihapus`, 
                         'success'
                     );
                 }
@@ -1920,13 +1928,7 @@
         function updateWatchlistRowNumbers() {
             document.querySelectorAll('#watchlist-table tbody tr').forEach((row, index) => {
                 const newRowNumber = index + 1;
-                const oldRowNumber = row.querySelector('td').textContent;
                 row.querySelector('td').textContent = newRowNumber;
-                
-                if (watchlistIntervals[oldRowNumber]) {
-                    watchlistIntervals[newRowNumber] = watchlistIntervals[oldRowNumber];
-                    delete watchlistIntervals[oldRowNumber];
-                }
             });
         }
 
@@ -1949,8 +1951,13 @@
                 tableBody.innerHTML = '';
                 
                 if (timers) {
-                    Object.entries(timers).forEach(([rowNumber, timerData]) => {
-                        const newRow = createNewRow(rowNumber, timerData);
+                    // Konversi ke array dan urutkan berdasarkan timestamp
+                    const timersArray = Object.entries(timers)
+                        .map(([id, timer]) => ({ id, ...timer }))
+                        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                    
+                    timersArray.forEach((timerData, index) => {
+                        const newRow = createNewRow(index + 1, timerData);
                         tableBody.appendChild(newRow);
                         addEventListenersToRow(newRow);
                         
@@ -1965,7 +1972,7 @@
                             let remainingSeconds = Math.max(0, (timerData.remainingSeconds || 0) - timeElapsed);
                             
                             // Update state lokal
-                            timerStates[rowNumber] = {
+                            timerStates[timerData.id] = {
                                 isRunning: true,
                                 remainingSeconds: remainingSeconds,
                                 finishTime: timerData.finishTime ? new Date(timerData.finishTime) : null,
@@ -1984,13 +1991,13 @@
                             
                             const updateTimer = async () => {
                                 if (remainingSeconds <= 0) {
-                                    clearInterval(activeIntervals[rowNumber]);
-                                    delete activeIntervals[rowNumber];
+                                    clearInterval(activeIntervals[timerData.id]);
+                                    delete activeIntervals[timerData.id];
                                     
-                                    timerStates[rowNumber].isRunning = false;
-                                    timerStates[rowNumber].remainingSeconds = 0;
+                                    timerStates[timerData.id].isRunning = false;
+                                    timerStates[timerData.id].remainingSeconds = 0;
                                     
-                                    await saveTimerToFirebase(rowNumber, {
+                                    await saveTimerToFirebase(timerData.id, {
                                         isRunning: false,
                                         remainingSeconds: 0,
                                         finishTime: null
@@ -1999,7 +2006,7 @@
                                     finishTimeBox.classList.add('hidden');
 
                                     await handleTimerCompletion(
-                                        rowNumber, 
+                                        timerData.id, 
                                         newRow.querySelector('.name-input'),
                                         formatFinishTime(new Date(timerData.finishTime))
                                     );
@@ -2007,15 +2014,15 @@
                                     return;
                                 }
                                 
-                                timerStates[rowNumber].remainingSeconds = remainingSeconds - 1;
-                                const h = String(Math.floor(timerStates[rowNumber].remainingSeconds / 3600)).padStart(2, '0');
-                                const m = String(Math.floor((timerStates[rowNumber].remainingSeconds % 3600) / 60)).padStart(2, '0');
-                                const s = String(timerStates[rowNumber].remainingSeconds % 60).padStart(2, '0');
+                                timerStates[timerData.id].remainingSeconds = remainingSeconds - 1;
+                                const h = String(Math.floor(timerStates[timerData.id].remainingSeconds / 3600)).padStart(2, '0');
+                                const m = String(Math.floor((timerStates[timerData.id].remainingSeconds % 3600) / 60)).padStart(2, '0');
+                                const s = String(timerStates[timerData.id].remainingSeconds % 60).padStart(2, '0');
                                 timerDisplay.textContent = `${h}:${m}:${s}`;
                                 remainingSeconds--;
                                 
-                                await saveTimerToFirebase(rowNumber, {
-                                    remainingSeconds: timerStates[rowNumber].remainingSeconds,
+                                await saveTimerToFirebase(timerData.id, {
+                                    remainingSeconds: timerStates[timerData.id].remainingSeconds,
                                     isRunning: true,
                                     timestamp: firebase.database.ServerValue.TIMESTAMP
                                 });
@@ -2028,7 +2035,7 @@
                             timerDisplay.classList.remove('hidden');
                             
                             // Mulai interval baru
-                            activeIntervals[rowNumber] = setInterval(updateTimer, 1000);
+                            activeIntervals[timerData.id] = setInterval(updateTimer, 1000);
                         }
                     });
                 }
@@ -2039,15 +2046,20 @@
                 tableBody.innerHTML = '';
                 
                 if (watchlist) {
-                    Object.entries(watchlist).forEach(([rowNumber, watchlistData]) => {
-                        const newRow = createNewWatchlistRow(rowNumber, watchlistData);
+                    // Konversi ke array dan urutkan berdasarkan timestamp
+                    const watchlistArray = Object.entries(watchlist)
+                        .map(([id, item]) => ({ id, ...item }))
+                        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                    
+                    watchlistArray.forEach((watchlistData, index) => {
+                        const newRow = createNewWatchlistRow(index + 1, watchlistData);
                         tableBody.appendChild(newRow);
-                        addEventListenersToWatchlistRow(newRow);
+                        addEventListenersToWatchlistRow(newRow, watchlistData.id);
                         
                         // Jika ada deadline dan belum selesai, jadwalkan reminder
                         if (watchlistData.deadline && !watchlistData.completed) {
                             scheduleWatchlistReminders(
-                                rowNumber, 
+                                watchlistData.id, 
                                 watchlistData.name, 
                                 watchlistData.deadline
                             );
