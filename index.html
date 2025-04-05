@@ -595,6 +595,181 @@
             showNotification('Berhasil', 'Waktu UTC telah dikonversi ke WIB', 'success');
         }
 
+        // ================= TIMER CONTROL FUNCTIONS =================
+        function startTimer(rowNumber, nameInput, urlInput, timerInput, timerDisplay, finishTimeBox, startButton, stopButton) {
+            // Parse waktu dari input
+            const [hours, minutes, seconds] = timerInput.value.split(':').map(Number);
+            const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+            
+            if (totalSeconds <= 0) {
+                showNotification('Peringatan', 'Waktu tidak valid. Harap masukkan waktu yang lebih dari 0 detik.', 'warning');
+                return;
+            }
+            
+            // Hitung waktu selesai
+            const now = new Date();
+            const finishTime = new Date(now.getTime() + totalSeconds * 1000);
+            const finishTimeFormatted = formatFinishTime(finishTime);
+            
+            // Update UI
+            startButton.disabled = true;
+            startButton.classList.add('bg-green-500', 'text-white');
+            stopButton.disabled = false;
+            timerDisplay.textContent = timerInput.value;
+            timerDisplay.classList.remove('hidden');
+            finishTimeBox.textContent = finishTimeFormatted;
+            finishTimeBox.classList.remove('hidden');
+            
+            // Simpan state timer
+            timerStates[rowNumber] = {
+                isRunning: true,
+                remainingSeconds: totalSeconds,
+                finishTime: finishTime,
+                hasNotified: false
+            };
+            
+            // Simpan ke Firebase
+            saveTimerToFirebase(rowNumber, {
+                name: nameInput.value,
+                url: urlInput.value,
+                timer: timerInput.value,
+                timerInputValue: timerInput.value,
+                isRunning: true,
+                remainingSeconds: totalSeconds,
+                finishTime: finishTime.getTime(),
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                hasNotified: false,
+                startDisabled: true,
+                stopDisabled: false
+            });
+            
+            // Mulai countdown
+            activeIntervals[rowNumber] = setInterval(async () => {
+                if (timerStates[rowNumber].remainingSeconds <= 0) {
+                    clearInterval(activeIntervals[rowNumber]);
+                    delete activeIntervals[rowNumber];
+                    
+                    // Update UI saat timer selesai
+                    startButton.disabled = false;
+                    startButton.classList.remove('bg-green-500', 'text-white');
+                    stopButton.disabled = true;
+                    timerDisplay.textContent = '00:00:00';
+                    
+                    // Update state
+                    timerStates[rowNumber].isRunning = false;
+                    timerStates[rowNumber].remainingSeconds = 0;
+                    
+                    // Simpan ke Firebase
+                    await saveTimerToFirebase(rowNumber, {
+                        isRunning: false,
+                        remainingSeconds: 0,
+                        finishTime: null,
+                        startDisabled: false,
+                        stopDisabled: true
+                    });
+                    
+                    // Handle notifikasi
+                    await handleTimerCompletion(
+                        rowNumber, 
+                        nameInput,
+                        finishTimeFormatted
+                    );
+                    
+                    return;
+                }
+                
+                // Update timer display
+                timerStates[rowNumber].remainingSeconds--;
+                const h = String(Math.floor(timerStates[rowNumber].remainingSeconds / 3600)).padStart(2, '0');
+                const m = String(Math.floor((timerStates[rowNumber].remainingSeconds % 3600) / 60)).padStart(2, '0');
+                const s = String(timerStates[rowNumber].remainingSeconds % 60).padStart(2, '0');
+                timerDisplay.textContent = `${h}:${m}:${s}`;
+                
+                // Simpan ke Firebase secara periodik
+                if (timerStates[rowNumber].remainingSeconds % 10 === 0) {
+                    await saveTimerToFirebase(rowNumber, {
+                        remainingSeconds: timerStates[rowNumber].remainingSeconds,
+                        isRunning: true,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+            }, 1000);
+        }
+
+        function stopTimer(rowNumber, nameInput, urlInput, timerDisplay, startButton, stopButton) {
+            // Hentikan interval
+            if (activeIntervals[rowNumber]) {
+                clearInterval(activeIntervals[rowNumber]);
+                delete activeIntervals[rowNumber];
+            }
+            
+            // Update UI
+            startButton.disabled = false;
+            startButton.classList.remove('bg-green-500', 'text-white');
+            stopButton.disabled = true;
+            
+            // Update state
+            timerStates[rowNumber].isRunning = false;
+            
+            // Simpan ke Firebase
+            saveTimerToFirebase(rowNumber, {
+                isRunning: false,
+                startDisabled: false,
+                stopDisabled: true,
+                remainingSeconds: timerStates[rowNumber].remainingSeconds,
+                timer: timerDisplay.textContent
+            });
+            
+            showNotification(
+                'Timer Dihentikan', 
+                `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) telah dihentikan`, 
+                'info'
+            );
+        }
+
+        function restartTimer(rowNumber, nameInput, urlInput, timerInput, timerDisplay, finishTimeBox) {
+            // Hentikan timer jika sedang berjalan
+            if (activeIntervals[rowNumber]) {
+                clearInterval(activeIntervals[rowNumber]);
+                delete activeIntervals[rowNumber];
+            }
+            
+            // Reset UI
+            timerDisplay.textContent = '00:00:00';
+            timerDisplay.classList.add('hidden');
+            finishTimeBox.classList.add('hidden');
+            
+            // Reset state
+            timerStates[rowNumber] = {
+                isRunning: false,
+                remainingSeconds: 0,
+                finishTime: null,
+                hasNotified: false
+            };
+            
+            // Reset input ke nilai default
+            timerInput.value = '24:00:00';
+            
+            // Simpan ke Firebase
+            saveTimerToFirebase(rowNumber, {
+                isRunning: false,
+                remainingSeconds: 0,
+                finishTime: null,
+                timer: '00:00:00',
+                timerInputValue: '24:00:00',
+                startDisabled: false,
+                stopDisabled: true,
+                timerVisible: false,
+                hasNotified: false
+            });
+            
+            showNotification(
+                'Timer Direset', 
+                `Timer #${rowNumber} (${nameInput.value || 'Tanpa Nama'}) telah direset`, 
+                'success'
+            );
+        }
+
         // ================= TELEGRAM NOTIFICATION =================
         async function sendTelegramNotification(rowNumber, timerName, finishTime) {
             console.log(`[Telegram] Mengirim notifikasi untuk timer #${rowNumber}`);
@@ -779,8 +954,8 @@
             async function sendDailyReminder() {
                 console.log('[Daily Reminder] Memulai proses pengiriman...');
                 
-                if (!BOT_TOKEN || !CHAT_ID) {
-                    console.error('Token bot atau chat ID tidak valid');
+                if (!BOT_TOKEN || BOT_TOKEN.includes('TOKEN_BOT_ANDA')) {
+                    console.error("Token bot belum dikonfigurasi dengan benar");
                     return;
                 }
 
