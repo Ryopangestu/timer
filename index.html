@@ -887,116 +887,6 @@
             }
         }
 
-        // ================= WATCHLIST REMINDER SCHEDULER =================
-        function scheduleWatchlistReminders(rowNumber, name, deadline) {
-            // Hentikan reminder sebelumnya jika ada
-            if (watchlistIntervals[rowNumber]) {
-                watchlistIntervals[rowNumber].forEach(interval => clearInterval(interval));
-                delete watchlistIntervals[rowNumber];
-            }
-            
-            const deadlineDate = new Date(deadline);
-            const now = new Date();
-            const timeDiff = deadlineDate - now;
-            
-            if (timeDiff <= 0) {
-                // Deadline sudah lewat
-                sendWatchlistReminder(
-                    rowNumber,
-                    name,
-                    deadline,
-                    "🚨 DEADLINE SUDAH TIBA!"
-                );
-                return;
-            }
-            
-            watchlistIntervals[rowNumber] = [];
-            
-            // Fungsi untuk mengirim reminder dengan pesan yang sesuai
-            function scheduleReminder(timeout, message) {
-                if (timeout > 0) {
-                    const timerId = setTimeout(() => {
-                        // Hitung ulang sisa waktu yang akurat saat reminder dikirim
-                        const remainingTime = deadlineDate - new Date();
-                        const remainingDays = Math.floor(remainingTime / (1000 * 60 * 60 * 24));
-                        const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
-                        
-                        let accurateMessage = message;
-                        if (remainingDays >= 30) {
-                            const months = Math.floor(remainingDays / 30);
-                            accurateMessage = `⏳ Deadline dalam ${months} bulan${months > 1 ? '' : ''}!`;
-                        } else if (remainingDays >= 7) {
-                            const weeks = Math.floor(remainingDays / 7);
-                            accurateMessage = `⏳ Deadline dalam ${weeks} minggu${weeks > 1 ? '' : ''}!`;
-                        } else if (remainingDays >= 1) {
-                            accurateMessage = `⏳ Deadline dalam ${remainingDays} hari${remainingDays > 1 ? '' : ''}!`;
-                        } else if (remainingHours >= 1) {
-                            accurateMessage = `⏳ Deadline dalam ${remainingHours} jam${remainingHours > 1 ? '' : ''}!`;
-                        } else {
-                            accurateMessage = "🚨 DEADLINE SUDAH TIBA!";
-                        }
-                        
-                        sendWatchlistReminder(
-                            rowNumber,
-                            name,
-                            deadline,
-                            accurateMessage
-                        );
-                    }, timeout);
-                    
-                    watchlistIntervals[rowNumber].push(timerId);
-                }
-            }
-
-            // Selalu kirim reminder saat deadline tiba
-            scheduleReminder(timeDiff, "🚨 DEADLINE SUDAH TIBA!");
-
-            // Aturan reminder berdasarkan waktu yang tersisa
-            const remainingDays = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-            const remainingHours = Math.floor(timeDiff / (1000 * 60 * 60));
-
-            if (remainingHours <= 6) {
-                // Jika kurang dari 6 jam: reminder setiap jam
-                for (let h = remainingHours - 1; h >= 1; h--) {
-                    scheduleReminder(timeDiff - (h * 60 * 60 * 1000), `⏳ Deadline dalam ${h} jam${h > 1 ? '' : ''}!`);
-                }
-            } else if (remainingHours <= 24) {
-                // Jika 6-24 jam: reminder 12 jam dan 6 jam sebelum deadline
-                scheduleReminder(timeDiff - (12 * 60 * 60 * 1000), "⏳ Deadline dalam 12 jam!");
-                scheduleReminder(timeDiff - (6 * 60 * 60 * 1000), "⏳ Deadline dalam 6 jam!");
-            } else if (remainingDays <= 2) {
-                // Jika 1-2 hari: reminder setiap 12 jam
-                for (let d = remainingDays; d >= 1; d--) {
-                    scheduleReminder(timeDiff - (d * 12 * 60 * 60 * 1000), `⏳ Deadline dalam ${d * 12} jam!`);
-                }
-            } else if (remainingDays <= 7) {
-                // Jika 3-7 hari: reminder setiap hari
-                for (let d = remainingDays; d >= 1; d--) {
-                    scheduleReminder(timeDiff - (d * 24 * 60 * 60 * 1000), `⏳ Deadline dalam ${d} hari${d > 1 ? '' : ''}!`);
-                }
-            } else if (remainingDays <= 30) {
-                // Jika 1-4 minggu: reminder setiap minggu
-                const weeks = Math.floor(remainingDays / 7);
-                for (let w = weeks; w >= 1; w--) {
-                    scheduleReminder(timeDiff - (w * 7 * 24 * 60 * 60 * 1000), `⏳ Deadline dalam ${w} minggu${w > 1 ? '' : ''}!`);
-                }
-                // Plus reminder 3 hari dan 1 hari sebelum deadline
-                scheduleReminder(timeDiff - (3 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 3 hari!");
-                scheduleReminder(timeDiff - (24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 hari!");
-            } else {
-                // Jika lebih dari 1 bulan: reminder setiap bulan
-                const months = Math.floor(remainingDays / 30);
-                for (let m = months; m >= 1; m--) {
-                    scheduleReminder(timeDiff - (m * 30 * 24 * 60 * 60 * 1000), `⏳ Deadline dalam ${m} bulan${m > 1 ? '' : ''}!`);
-                }
-                // Plus reminder 2 minggu, 1 minggu, 3 hari, dan 1 hari sebelum deadline
-                scheduleReminder(timeDiff - (14 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 2 minggu!");
-                scheduleReminder(timeDiff - (7 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 minggu!");
-                scheduleReminder(timeDiff - (3 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 3 hari!");
-                scheduleReminder(timeDiff - (24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 hari!");
-            }
-        }
-
         // ================= DAILY REMINDER FUNCTIONS =================
         function setupDailyReminder() {
             function checkTime() {
@@ -1089,8 +979,8 @@
 
                 let message = `⏰ <b>DAILY REMINDER</b> ⏰\n━━━━━━━━━━━━━━━━━━━━\n`;
                 message += `📅 <b>Tanggal:</b> <code>${dateStr}</code>\n`;
-                message += `⏱ <b>Timer Aktif:</b> <code>${activeTimers}/${timers.length}</code>\n`;
-                message += `📝 <b>Watchlist Aktif:</b> <code>${watchlist.length}</code>\n\n`;
+                message += `⏱ <b>Timer Aktif:</b> <
+                                message += `📝 <b>Watchlist Aktif:</b> <code>${watchlist.length}</code>\n\n`;
                 
                 if (timers.length > 0) {
                     message += `📋 <b>Daftar Timer:</b>\n\n`;
@@ -1280,6 +1170,94 @@
                 console.error(`[Watchlist] Gagal menandai item #${rowNumber} sebagai selesai:`, error);
                 return false;
             }
+        }
+
+        // ================= WATCHLIST REMINDER SCHEDULER =================
+        function scheduleWatchlistReminders(rowNumber, name, deadline) {
+            // Hentikan reminder sebelumnya jika ada
+            if (watchlistIntervals[rowNumber]) {
+                watchlistIntervals[rowNumber].forEach(interval => clearInterval(interval));
+                delete watchlistIntervals[rowNumber];
+            }
+            
+            const deadlineDate = new Date(deadline);
+            const now = new Date();
+            const timeDiff = deadlineDate - now;
+            
+            if (timeDiff <= 0) {
+                // Deadline sudah lewat
+                return;
+            }
+            
+            const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+            const hoursDiff = Math.floor(timeDiff / (1000 * 60 * 60));
+            
+            watchlistIntervals[rowNumber] = [];
+            
+            // Fungsi untuk mengirim reminder dengan pesan yang sesuai
+            function scheduleReminder(timeout, message) {
+                if (timeout > 0) {
+                    watchlistIntervals[rowNumber].push(
+                        setTimeout(() => {
+                            // Hitung ulang sisa waktu yang akurat saat reminder dikirim
+                            const remainingDays = Math.floor((deadlineDate - new Date()) / (1000 * 60 * 60 * 24));
+                            const remainingHours = Math.floor((deadlineDate - new Date()) / (1000 * 60 * 60));
+                            
+                            let accurateMessage = message;
+                            if (remainingDays >= 30) {
+                                const months = Math.floor(remainingDays / 30);
+                                accurateMessage = `⏳ Deadline dalam ${months} bulan${months > 1 ? '' : ''}!`;
+                            } else if (remainingDays >= 7) {
+                                const weeks = Math.floor(remainingDays / 7);
+                                accurateMessage = `⏳ Deadline dalam ${weeks} minggu${weeks > 1 ? '' : ''}!`;
+                            } else if (remainingDays >= 1) {
+                                accurateMessage = `⏳ Deadline dalam ${remainingDays} hari${remainingDays > 1 ? '' : ''}!`;
+                            } else if (remainingHours >= 1) {
+                                accurateMessage = `⏳ Deadline dalam ${remainingHours} jam${remainingHours > 1 ? '' : ''}!`;
+                            }
+                            
+                            sendWatchlistReminder(
+                                rowNumber,
+                                name,
+                                deadline,
+                                accurateMessage
+                            );
+                        }, timeout)
+                    );
+                }
+            }
+
+            // Aturan reminder berdasarkan waktu yang tersisa
+            if (daysDiff <= 2) {
+                // Jika 1-2 hari: reminder 12 jam dan 6 jam sebelum deadline
+                scheduleReminder(timeDiff - (12 * 60 * 60 * 1000), "⏳ Deadline dalam 12 jam!");
+                scheduleReminder(timeDiff - (6 * 60 * 60 * 1000), "⏳ Deadline dalam 6 jam!");
+            } else if (daysDiff <= 7) {
+                // Jika 3 hari - 1 minggu: reminder 2 hari, 1 hari, dan 6 jam sebelum deadline
+                scheduleReminder(timeDiff - (2 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 2 hari!");
+                scheduleReminder(timeDiff - (24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 hari!");
+                scheduleReminder(timeDiff - (6 * 60 * 60 * 1000), "⏳ Deadline dalam 6 jam!");
+            } else if (daysDiff <= 30) {
+                // Jika 1 minggu - 1 bulan: reminder 1 minggu, 2 hari, 1 hari, dan 6 jam sebelum deadline
+                scheduleReminder(timeDiff - (7 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 minggu!");
+                scheduleReminder(timeDiff - (2 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 2 hari!");
+                scheduleReminder(timeDiff - (24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 hari!");
+                scheduleReminder(timeDiff - (6 * 60 * 60 * 1000), "⏳ Deadline dalam 6 jam!");
+            } else {
+                // Jika lebih dari 1 bulan: reminder setiap bulan, 2 minggu, 1 minggu, 2 hari, 1 hari, dan 6 jam
+                const monthsDiff = Math.floor(daysDiff / 30);
+                for (let i = monthsDiff; i >= 1; i--) {
+                    scheduleReminder(timeDiff - (i * 30 * 24 * 60 * 60 * 1000), `⏳ Deadline dalam ${i} bulan${i > 1 ? '' : ''}!`);
+                }
+                scheduleReminder(timeDiff - (14 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 2 minggu!");
+                scheduleReminder(timeDiff - (7 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 minggu!");
+                scheduleReminder(timeDiff - (2 * 24 * 60 * 60 * 1000), "⏳ Deadline dalam 2 hari!");
+                scheduleReminder(timeDiff - (24 * 60 * 60 * 1000), "⏳ Deadline dalam 1 hari!");
+                scheduleReminder(timeDiff - (6 * 60 * 60 * 1000), "⏳ Deadline dalam 6 jam!");
+            }
+            
+            // Selalu kirim reminder saat deadline tiba
+            scheduleReminder(timeDiff, "🚨 DEADLINE SUDAH TIBA!");
         }
 
         // ================= FIREBASE FUNCTIONS =================
@@ -1555,7 +1533,8 @@
             saveWatchlistToFirebase(rowCount, {
                 name: '',
                 deadline: null,
-                completed: false
+                completed: false,
+                createdAt: firebase.database.ServerValue.TIMESTAMP
             });
             
             showNotification('Berhasil', `Watchlist baru (#${rowCount}) telah ditambahkan`, 'success');
@@ -1911,9 +1890,8 @@
                 notificationBoxes.forEach(box => {
                     if (box.dataset.rowNumber === oldRowNumber) {
                         box.dataset.rowNumber = newRowNumber;
-                        box.textContent = box.textContent.replace(`#${oldRowNumber}`, `#${newRowNumber}`);
-                    }
-                });
+                        box.text
+                    });
             });
         }
 
