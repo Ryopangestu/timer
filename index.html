@@ -6,7 +6,7 @@
   <title>Airdrop Tracker Ultimate</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <!-- Tambahkan Firebase SDK -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
   
@@ -1590,6 +1590,94 @@
       dateTo: null
     };
 
+    // Initialize the app when DOM is loaded
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Initialize Firebase listeners
+      setupFirebaseListeners();
+      
+      // Set today's date as default in the form
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('airdropDate').value = today;
+      
+      // Initialize calendar
+      renderCalendar();
+      
+      // Load filters from URL if any
+      loadFiltersFromURL();
+      
+      // Set up event listeners
+      setupEventListeners();
+      
+      // Initialize wallet selection
+      setupWalletSelection();
+
+      // Load initial data
+      await loadCheckins();
+      await loadTimers();
+      await loadSpotlights();
+
+      // Check for due check-ins and timers
+      checkForDueCheckins();
+      checkForDueTimers();
+
+      // Set up interval checks (every minute)
+      setInterval(() => {
+        checkForDueCheckins();
+        checkForDueTimers();
+      }, 60000);
+    });
+
+    // Set up Firebase realtime listeners
+    function setupFirebaseListeners() {
+      // Airdrops listener
+      database.ref('airdrops').on('value', (snapshot) => {
+        const airdrops = snapshot.val() || [];
+        updateStats(airdrops);
+        
+        // Update UI based on current view
+        if (selectedDate) {
+          const dateStr = selectedDate.toISOString().split('T')[0];
+          showAirdropsForDate(dateStr);
+        } else {
+          filterAirdrops();
+        }
+        
+        // Update spotlight if needed
+        if (document.getElementById('spotlight-tab').classList.contains('active')) {
+          loadSpotlights();
+        }
+      });
+      
+      // Checkins listener
+      database.ref('checkins').on('value', (snapshot) => {
+        const checkins = snapshot.val() || [];
+        if (document.getElementById('checkin-tab').classList.contains('active')) {
+          renderCheckinList(checkins);
+        }
+      });
+      
+      // Timers listener
+      database.ref('timers').on('value', (snapshot) => {
+        const timers = snapshot.val() || [];
+        if (document.getElementById('timer-tab').classList.contains('active')) {
+          renderTimerList(timers);
+        }
+      });
+    }
+
+    // Update statistics dashboard with Firebase data
+    function updateStats(airdrops) {
+      const total = airdrops.length;
+      const notStarted = airdrops.filter(a => a.progress === 'not-started').length;
+      const inProgress = airdrops.filter(a => a.progress === 'in-progress').length;
+      const completed = airdrops.filter(a => a.progress === 'completed').length;
+      
+      document.getElementById('totalAirdrops').textContent = total;
+      document.getElementById('notStartedAirdrops').textContent = notStarted;
+      document.getElementById('inProgressAirdrops').textContent = inProgress;
+      document.getElementById('completedAirdrops').textContent = completed;
+    }
+
     // Fungsi untuk menyimpan data ke Firebase
     async function saveToFirebase(path, data) {
       try {
@@ -1610,137 +1698,6 @@
         console.error("Error loading from Firebase:", error);
         return [];
       }
-    }
-
-    // Initialize the app when DOM is loaded
-    document.addEventListener('DOMContentLoaded', async () => {
-      // Set today's date as default in the form
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('airdropDate').value = today;
-      
-      // Initialize calendar
-      renderCalendar();
-      
-      // Load airdrops from Firebase
-      await loadAirdrops();
-      
-      // Load filters from URL if any
-      loadFiltersFromURL();
-      
-      // Set up event listeners
-      setupEventListeners();
-      
-      // Initialize wallet selection
-      setupWalletSelection();
-      
-      // Update stats
-      updateStats();
-
-      // Load check-ins and timers from Firebase
-      await loadCheckins();
-      await loadTimers();
-      await loadSpotlights();
-
-      // Check for due check-ins and timers
-      checkForDueCheckins();
-      checkForDueTimers();
-
-      // Set up interval checks (every minute)
-      setInterval(() => {
-        checkForDueCheckins();
-        checkForDueTimers();
-      }, 60000);
-    });
-
-    // Update statistics dashboard
-    function updateStats() {
-      const airdrops = JSON.parse(localStorage.getItem('airdrops') || '[]');
-      
-      const total = airdrops.length;
-      const notStarted = airdrops.filter(a => a.progress === 'not-started').length;
-      const inProgress = airdrops.filter(a => a.progress === 'in-progress').length;
-      const completed = airdrops.filter(a => a.progress === 'completed').length;
-      
-      document.getElementById('totalAirdrops').textContent = total;
-      document.getElementById('notStartedAirdrops').textContent = notStarted;
-      document.getElementById('inProgressAirdrops').textContent = inProgress;
-      document.getElementById('completedAirdrops').textContent = completed;
-    }
-
-    // Set up wallet selection UI
-    function setupWalletSelection() {
-      const walletOptions = document.querySelectorAll('.wallet-option input');
-      
-      walletOptions.forEach(option => {
-        option.addEventListener('change', function() {
-          const parent = this.parentElement;
-          if (this.checked) {
-            parent.classList.add('selected');
-          } else {
-            parent.classList.remove('selected');
-          }
-        });
-      });
-
-      // Setup check-in frequency toggle
-      const frequencyRadios = document.querySelectorAll('input[name="checkinFrequencyType"]');
-      frequencyRadios.forEach(radio => {
-        radio.addEventListener('change', function() {
-          document.getElementById('dailyTimeContainer').style.display = 'none';
-          document.getElementById('weeklyOptionsContainer').style.display = 'none';
-          document.getElementById('monthlyOptionsContainer').style.display = 'none';
-          
-          if (this.value === 'daily') {
-            document.getElementById('dailyTimeContainer').style.display = 'block';
-          } else if (this.value === 'weekly') {
-            document.getElementById('weeklyOptionsContainer').style.display = 'block';
-          } else if (this.value === 'monthly') {
-            document.getElementById('monthlyOptionsContainer').style.display = 'block';
-          }
-        });
-      });
-
-      // Setup day selection for weekly check-ins
-      const dayOptions = document.querySelectorAll('.day-option');
-      dayOptions.forEach(day => {
-        day.addEventListener('click', function() {
-          this.classList.toggle('selected');
-          updateSelectedDays();
-        });
-      });
-    }
-
-    function updateSelectedDays() {
-      const selectedDays = Array.from(document.querySelectorAll('.day-option.selected'))
-        .map(day => day.getAttribute('data-day'));
-      document.getElementById('selectedDays').value = selectedDays.join(',');
-    }
-
-    // Set up all event listeners
-    function setupEventListeners() {
-      // Calendar navigation
-      document.getElementById('prevMonth').addEventListener('click', () => {
-        currentDate.setMonth(currentDate.getMonth() - 1);
-        renderCalendar();
-      });
-      
-      document.getElementById('nextMonth').addEventListener('click', () => {
-        currentDate.setMonth(currentDate.getMonth() + 1);
-        renderCalendar();
-      });
-      
-      // Form submission on Enter key
-      document.getElementById('airdropName').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addAirdrop();
-      });
-
-      document.getElementById('newCheckinProject').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addCheckin();
-      });
-
-      document.getElementById('newTimerProject').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addTimer();
-      });
     }
 
     // Switch between tabs
@@ -2040,164 +1997,6 @@
       }
     }
 
-    // Add new airdrop or update existing
-    async function addAirdrop() {
-      const name = document.getElementById('airdropName').value;
-      const category = document.getElementById('airdropCategory').value;
-      const date = document.getElementById('airdropDate').value;
-      const status = document.getElementById('airdropStatus').value;
-      const progress = document.getElementById('airdropProgress').value;
-      const funding = document.getElementById('airdropFunding').value;
-      const link = document.getElementById('airdropLink').value;
-      const notes = document.getElementById('airdropNotes').value;
-
-      // Get selected wallets
-      const walletCheckboxes = document.querySelectorAll('.wallet-option input[name="wallet"]:checked');
-      const wallets = Array.from(walletCheckboxes).map(cb => cb.value);
-      
-      // Validate required fields
-      if (!name || !date || !status || !progress) {
-        alert('Nama proyek, tanggal, status dan progres wajib diisi!');
-        return;
-      }
-      
-      // Validate at least one wallet is selected
-      if (wallets.length === 0) {
-        alert('Pilih minimal satu Nama/Wallet!');
-        return;
-      }
-
-      const airdrop = {
-        id: editingAirdropId || Date.now(),
-        name,
-        category,
-        wallets,
-        date,
-        status,
-        progress,
-        funding: funding ? parseInt(funding) : null,
-        link,
-        notes,
-        lastUpdated: new Date().toISOString(),
-        spotlight: false
-      };
-
-      // Save to Firebase
-      const airdrops = await loadFromFirebase('airdrops');
-      
-      if (editingAirdropId) {
-        // Update existing airdrop
-        const index = airdrops.findIndex(a => a.id === editingAirdropId);
-        if (index !== -1) {
-          airdrop.spotlight = airdrops[index].spotlight; // Preserve spotlight status
-          airdrops[index] = airdrop;
-        }
-      } else {
-        // Add new airdrop
-        airdrops.push(airdrop);
-      }
-      
-      await saveToFirebase('airdrops', airdrops);
-
-      // Reset form and editing state
-      resetForm();
-      
-      // Update UI
-      renderCalendar();
-      updateStats();
-      
-      // Show airdrops for the selected date or all
-      if (selectedDate) {
-        const dateStr = selectedDate.toISOString().split('T')[0];
-        showAirdropsForDate(dateStr);
-      } else {
-        filterAirdrops();
-      }
-    }
-
-    // Reset the form to default state
-    function resetForm() {
-      document.getElementById('airdropName').value = '';
-      document.getElementById('airdropDate').value = new Date().toISOString().split('T')[0];
-      document.getElementById('airdropFunding').value = '';
-      document.getElementById('airdropLink').value = '';
-      document.getElementById('airdropNotes').value = '';
-      document.getElementById('airdropStatus').value = 'confirmed';
-      document.getElementById('airdropProgress').value = 'not-started';
-      document.getElementById('airdropCategory').value = 'testnet';
-      
-      // Reset wallet selection
-      document.querySelectorAll('.wallet-option input[name="wallet"]').forEach(checkbox => {
-        checkbox.checked = false;
-        checkbox.parentElement.classList.remove('selected');
-      });
-      
-      editingAirdropId = null;
-      document.getElementById('submitAirdropBtn').innerHTML = '<i class="fas fa-plus"></i> Tambah Airdrop';
-    }
-
-    // Prepare form for editing an airdrop
-    async function editAirdrop(id) {
-      const airdrops = await loadFromFirebase('airdrops');
-      const airdrop = airdrops.find(a => a.id === id);
-      
-      if (airdrop) {
-        editingAirdropId = id;
-        document.getElementById('airdropName').value = airdrop.name;
-        document.getElementById('airdropCategory').value = airdrop.category;
-        document.getElementById('airdropDate').value = airdrop.date;
-        document.getElementById('airdropStatus').value = airdrop.status;
-        document.getElementById('airdropProgress').value = airdrop.progress;
-        document.getElementById('airdropFunding').value = airdrop.funding || '';
-        document.getElementById('airdropLink').value = airdrop.link || '';
-        document.getElementById('airdropNotes').value = airdrop.notes || '';
-        document.getElementById('submitAirdropBtn').innerHTML = '<i class="fas fa-pen-to-square"></i> Update Airdrop';
-        
-        // Reset wallet selection
-        document.querySelectorAll('.wallet-option input[name="wallet"]').forEach(checkbox => {
-          checkbox.checked = false;
-          checkbox.parentElement.classList.remove('selected');
-        });
-        
-        // Set wallet selection
-        airdrop.wallets.forEach(wallet => {
-          const checkbox = document.querySelector(`.wallet-option input[name="wallet"][value="${wallet}"]`);
-          if (checkbox) {
-            checkbox.checked = true;
-            checkbox.parentElement.classList.add('selected');
-          }
-        });
-        
-        // Scroll to form for better UX
-        document.querySelector('.form-container').scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-
-    // Update progress status of an airdrop
-    async function updateProgress(id, newProgress) {
-      const airdrops = await loadFromFirebase('airdrops');
-      const airdrop = airdrops.find(a => a.id === id);
-      
-      if (airdrop) {
-        airdrop.progress = newProgress;
-        airdrop.lastUpdated = new Date().toISOString();
-        await saveToFirebase('airdrops', airdrops);
-        
-        // Refresh the view
-        if (selectedDate) {
-          const dateStr = selectedDate.toISOString().split('T')[0];
-          renderCalendar();
-          showAirdropsForDate(dateStr);
-        } else {
-          renderCalendar();
-          filterAirdrops();
-        }
-        
-        // Update stats
-        updateStats();
-      }
-    }
-
     // Get airdrops by specific date
     async function getAirdropsByDate(date) {
       const airdrops = await loadFromFirebase('airdrops');
@@ -2279,952 +2078,952 @@
         
         // Add funding level styling
         if (airdrop.funding) {
-          if (airdrop.funding >= 50) {
-            card.classList.add('high-funding');
-          } else if (airdrop.funding >= 10) {
-            card.classList.add('medium-funding');
-          } else {
-            card.classList.add('low-funding');
-          }
+          if (airdrop.funding >= 50)
+          card.classList.add('high-funding');
+        } else if (airdrop.funding >= 10) {
+          card.classList.add('medium-funding');
+        } else {
+          card.classList.add('low-funding');
         }
+      }
+      
+      // Status badge
+      const statusText = airdrop.status === 'confirmed' ? 'Confirmed' : 'Potensial';
+      const statusClass = airdrop.status === 'confirmed' ? 'status-confirmed' : 'status-potensial';
+      
+      // Progress badge
+      let progressText = '';
+      let progressClass = '';
+      switch(airdrop.progress) {
+        case 'not-started':
+          progressText = 'Belum Mulai';
+          progressClass = 'progress-not-started';
+          break;
+        case 'in-progress':
+          progressText = 'Dalam Pengerjaan';
+          progressClass = 'progress-in-progress';
+          break;
+        case 'completed':
+          progressText = 'Selesai';
+          progressClass = 'progress-completed';
+          break;
+      }
+      
+      // Funding badge
+      let fundingBadge = '';
+      if (airdrop.funding) {
+        let fundingClass = 'low-funding-badge';
+        if (airdrop.funding >= 50) fundingClass = 'high-funding-badge';
+        else if (airdrop.funding >= 10) fundingClass = 'medium-funding-badge';
         
-        // Status badge
-        const statusText = airdrop.status === 'confirmed' ? 'Confirmed' : 'Potensial';
-        const statusClass = airdrop.status === 'confirmed' ? 'status-confirmed' : 'status-potensial';
-        
-        // Progress badge
-        let progressText = '';
-        let progressClass = '';
-        switch(airdrop.progress) {
-          case 'not-started':
-            progressText = 'Belum Mulai';
-            progressClass = 'progress-not-started';
-            break;
-          case 'in-progress':
-            progressText = 'Dalam Pengerjaan';
-            progressClass = 'progress-in-progress';
-            break;
-          case 'completed':
-            progressText = 'Selesai';
-            progressClass = 'progress-completed';
-            break;
-        }
-        
-        // Funding badge
-        let fundingBadge = '';
-        if (airdrop.funding) {
-          let fundingClass = 'low-funding-badge';
-          if (airdrop.funding >= 50) fundingClass = 'high-funding-badge';
-          else if (airdrop.funding >= 10) fundingClass = 'medium-funding-badge';
-          
-          fundingBadge = `<span class="funding-badge ${fundingClass}">$${airdrop.funding}M</span>`;
-        }
-        
-        // Wallet tags
-        let walletTags = '';
-        if (airdrop.wallets && airdrop.wallets.length > 0) {
-          walletTags = `
-            <div class="wallet-tags">
-              ${airdrop.wallets.map(wallet => `<span class="wallet-tag">${wallet}</span>`).join('')}
-            </div>
-          `;
-        }
-        
-        // Build the card HTML
-        card.innerHTML = `
-          <h3>
-            ${airdrop.spotlight ? '<i class="fas fa-star" style="color: var(--warning);"></i>' : ''}
-            ${airdrop.name}
-            <span class="status-badge ${statusClass}">${statusText}</span>
-            <span class="progress-badge ${progressClass}">${progressText}</span>
-            ${fundingBadge}
-          </h3>
-          
-          <div class="airdrop-meta">
-            <div class="airdrop-meta-item">
-              <strong><i class="fas fa-tag"></i> Kategori:</strong>
-              <span>${airdrop.category}</span>
-            </div>
-            
-            <div class="airdrop-meta-item">
-              <strong><i class="fas fa-calendar-day"></i> Tanggal:</strong>
-              <span>${airdrop.date}</span>
-            </div>
-          </div>
-          
-          ${walletTags}
-          
-          ${airdrop.notes ? `<p style="margin: 10px 0; font-size: 0.9rem;"><i class="fas fa-note-sticky"></i> ${airdrop.notes}</p>` : ''}
-          
-          ${airdrop.link ? `<a href="${airdrop.link}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; color: var(--primary);"><i class="fas fa-link"></i> Buka Link</a>` : ''}
-          
-          <div class="airdrop-actions">
-            <button class="edit-btn" onclick="editAirdrop(${airdrop.id})">
-              <i class="fas fa-pen-to-square"></i> Edit
-            </button>
-            ${airdrop.progress !== 'completed' ? 
-              `<button class="progress-btn" onclick="updateProgress(${airdrop.id}, '${airdrop.progress === 'not-started' ? 'in-progress' : 'completed'}')">
-                <i class="fas fa-${airdrop.progress === 'not-started' ? 'play' : 'check'}"></i>
-                ${airdrop.progress === 'not-started' ? 'Mulai Kerjakan' : 'Tandai Selesai'}
-              </button>` : ''
-            }
-            <button class="progress-btn" onclick="toggleSpotlight(${airdrop.id})">
-              <i class="fas fa-star"></i> ${airdrop.spotlight ? 'Hapus dari' : 'Tambahkan ke'} Spotlight
-            </button>
-            <button class="delete-btn" onclick="deleteAirdrop(${airdrop.id})">
-              <i class="fas fa-trash"></i> Hapus
-            </button>
+        fundingBadge = `<span class="funding-badge ${fundingClass}">$${airdrop.funding}M</span>`;
+      }
+      
+      // Wallet tags
+      let walletTags = '';
+      if (airdrop.wallets && airdrop.wallets.length > 0) {
+        walletTags = `
+          <div class="wallet-tags">
+            ${airdrop.wallets.map(wallet => `<span class="wallet-tag">${wallet}</span>`).join('')}
           </div>
         `;
+      }
+      
+      // Build the card HTML
+      card.innerHTML = `
+        <h3>
+          ${airdrop.spotlight ? '<i class="fas fa-star" style="color: var(--warning);"></i>' : ''}
+          ${airdrop.name}
+          <span class="status-badge ${statusClass}">${statusText}</span>
+          <span class="progress-badge ${progressClass}">${progressText}</span>
+          ${fundingBadge}
+        </h3>
         
-        airdropList.appendChild(card);
-      });
-    }
+        <div class="airdrop-meta">
+          <div class="airdrop-meta-item">
+            <strong><i class="fas fa-tag"></i> Kategori:</strong>
+            <span>${airdrop.category}</span>
+          </div>
+          
+          <div class="airdrop-meta-item">
+            <strong><i class="fas fa-calendar-day"></i> Tanggal:</strong>
+            <span>${airdrop.date}</span>
+          </div>
+        </div>
+        
+        ${walletTags}
+        
+        ${airdrop.notes ? `<p style="margin: 10px 0; font-size: 0.9rem;"><i class="fas fa-note-sticky"></i> ${airdrop.notes}</p>` : ''}
+        
+        ${airdrop.link ? `<a href="${airdrop.link}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; color: var(--primary);"><i class="fas fa-link"></i> Buka Link</a>` : ''}
+        
+        <div class="airdrop-actions">
+          <button class="edit-btn" onclick="editAirdrop(${airdrop.id})">
+            <i class="fas fa-pen-to-square"></i> Edit
+          </button>
+          ${airdrop.progress !== 'completed' ? 
+            `<button class="progress-btn" onclick="updateProgress(${airdrop.id}, '${airdrop.progress === 'not-started' ? 'in-progress' : 'completed'}')">
+              <i class="fas fa-${airdrop.progress === 'not-started' ? 'play' : 'check'}"></i>
+              ${airdrop.progress === 'not-started' ? 'Mulai Kerjakan' : 'Tandai Selesai'}
+            </button>` : ''
+          }
+          <button class="progress-btn" onclick="toggleSpotlight(${airdrop.id})">
+            <i class="fas fa-star"></i> ${airdrop.spotlight ? 'Hapus dari' : 'Tambahkan ke'} Spotlight
+          </button>
+          <button class="delete-btn" onclick="deleteAirdrop(${airdrop.id})">
+            <i class="fas fa-trash"></i> Hapus
+          </button>
+        </div>
+      `;
+      
+      airdropList.appendChild(card);
+    });
+  }
 
-    // Show all airdrops (clear date filter)
-    function showAllAirdrops() {
-      selectedDate = null;
+  // Show all airdrops (clear date filter)
+  function showAllAirdrops() {
+    selectedDate = null;
+    renderCalendar();
+    filterAirdrops();
+  }
+
+  // Delete an airdrop
+  async function deleteAirdrop(id) {
+    if (!confirm('Apakah Anda yakin ingin menghapus airdrop ini?')) return;
+    
+    const airdrops = await loadFromFirebase('airdrops');
+    const updatedAirdrops = airdrops.filter(item => item.id !== id);
+    await saveToFirebase('airdrops', updatedAirdrops);
+    
+    // Refresh the view
+    if (selectedDate) {
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      renderCalendar();
+      showAirdropsForDate(dateStr);
+    } else {
       renderCalendar();
       filterAirdrops();
     }
+    
+    // Update stats
+    updateStats();
 
-    // Delete an airdrop
-    async function deleteAirdrop(id) {
-      if (!confirm('Apakah Anda yakin ingin menghapus airdrop ini?')) return;
-      
-      const airdrops = await loadFromFirebase('airdrops');
-      const updatedAirdrops = airdrops.filter(item => item.id !== id);
-      await saveToFirebase('airdrops', updatedAirdrops);
-      
-      // Refresh the view
-      if (selectedDate) {
-        const dateStr = selectedDate.toISOString().split('T')[0];
-        renderCalendar();
-        showAirdropsForDate(dateStr);
-      } else {
-        renderCalendar();
-        filterAirdrops();
+    // Update spotlight if needed
+    if (document.getElementById('spotlight-tab').classList.contains('active')) {
+      loadSpotlights();
+    }
+  }
+
+  /* ========== CHECK-IN FUNCTIONS ========== */
+  async function addCheckin() {
+    const project = document.getElementById('newCheckinProject').value;
+    const type = document.getElementById('newCheckinType').value;
+    const link = document.getElementById('newCheckinLink').value;
+    const notes = document.getElementById('newCheckinNotes').value;
+    const frequency = document.querySelector('input[name="checkinFrequencyType"]:checked').value;
+
+    // Get selected wallets
+    const walletCheckboxes = document.querySelectorAll('.wallet-option input[name="checkinWallet"]:checked');
+    const wallets = Array.from(walletCheckboxes).map(cb => cb.value);
+    
+    // Validate required fields
+    if (!project || !link || wallets.length === 0) {
+      alert('Nama proyek, link, dan wallet wajib diisi!');
+      return;
+    }
+
+    // Get time and day settings based on frequency
+    let time = '';
+    let days = [];
+    let monthlyDay = 1;
+    
+    if (frequency === 'daily') {
+      time = document.getElementById('newCheckinTime').value;
+    } else if (frequency === 'weekly') {
+      time = document.getElementById('weeklyCheckinTime').value;
+      days = document.getElementById('selectedDays').value.split(',').filter(Boolean);
+      if (days.length === 0) {
+        alert('Pilih minimal satu hari untuk check-in mingguan!');
+        return;
       }
-      
-      // Update stats
-      updateStats();
-
-      // Update spotlight if needed
-      if (document.getElementById('spotlight-tab').classList.contains('active')) {
-        loadSpotlights();
+    } else if (frequency === 'monthly') {
+      time = document.getElementById('monthlyCheckinTime').value;
+      monthlyDay = parseInt(document.getElementById('monthlyCheckinDay').value);
+      if (isNaN(monthlyDay) || monthlyDay < 1 || monthlyDay > 31) {
+        alert('Tanggal bulanan harus antara 1-31!');
+        return;
       }
     }
 
-    /* ========== CHECK-IN FUNCTIONS ========== */
-    async function addCheckin() {
-      const project = document.getElementById('newCheckinProject').value;
-      const type = document.getElementById('newCheckinType').value;
-      const link = document.getElementById('newCheckinLink').value;
-      const notes = document.getElementById('newCheckinNotes').value;
-      const frequency = document.querySelector('input[name="checkinFrequencyType"]:checked').value;
+    const checkin = {
+      id: editingCheckinId || Date.now(),
+      project,
+      type,
+      link,
+      wallets,
+      frequency,
+      time,
+      days,
+      monthlyDay,
+      notes,
+      lastChecked: null,
+      createdAt: new Date().toISOString()
+    };
 
-      // Get selected wallets
-      const walletCheckboxes = document.querySelectorAll('.wallet-option input[name="checkinWallet"]:checked');
-      const wallets = Array.from(walletCheckboxes).map(cb => cb.value);
-      
-      // Validate required fields
-      if (!project || !link || wallets.length === 0) {
-        alert('Nama proyek, link, dan wallet wajib diisi!');
-        return;
+    // Save to Firebase
+    const checkins = await loadFromFirebase('checkins');
+    
+    if (editingCheckinId) {
+      // Update existing check-in
+      const index = checkins.findIndex(c => c.id === editingCheckinId);
+      if (index !== -1) {
+        checkins[index] = checkin;
       }
+    } else {
+      // Add new check-in
+      checkins.push(checkin);
+    }
+    
+    await saveToFirebase('checkins', checkins);
 
-      // Get time and day settings based on frequency
-      let time = '';
-      let days = [];
-      let monthlyDay = 1;
+    // Reset form
+    document.getElementById('newCheckinProject').value = '';
+    document.getElementById('newCheckinLink').value = '';
+    document.getElementById('newCheckinNotes').value = '';
+    document.querySelectorAll('.wallet-option input[name="checkinWallet"]').forEach(checkbox => {
+      checkbox.checked = false;
+      checkbox.parentElement.classList.remove('selected');
+    });
+    
+    // Reset day selection for weekly
+    document.querySelectorAll('.day-option').forEach(day => {
+      day.classList.remove('selected');
+    });
+    
+    editingCheckinId = null;
+    document.getElementById('submitCheckinBtn').innerHTML = '<i class="fas fa-plus"></i> Tambah Check-in';
+    
+    // Update UI
+    loadCheckins();
+  }
+
+  async function loadCheckins() {
+    const checkins = await loadFromFirebase('checkins');
+    
+    if (checkins.length === 0) {
+      document.getElementById('checkinList').innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-bell-slash"></i>
+          <p>Belum ada check-in yang dijadwalkan. Tambahkan check-in baru untuk memulai.</p>
+          <button onclick="document.querySelector('#checkin-tab .form-container').scrollIntoView({ behavior: 'smooth' })">
+            <i class="fas fa-plus"></i> Tambah Check-in
+          </button>
+        </div>
+      `;
+      return;
+    }
+    
+    renderCheckinList(checkins);
+  }
+
+  function renderCheckinList(checkins) {
+    const checkinList = document.getElementById('checkinList');
+    checkinList.innerHTML = '';
+    
+    checkins.forEach(checkin => {
+      const card = document.createElement('div');
+      card.className = 'airdrop-card';
       
-      if (frequency === 'daily') {
-        time = document.getElementById('newCheckinTime').value;
-      } else if (frequency === 'weekly') {
-        time = document.getElementById('weeklyCheckinTime').value;
-        days = document.getElementById('selectedDays').value.split(',').filter(Boolean);
-        if (days.length === 0) {
-          alert('Pilih minimal satu hari untuk check-in mingguan!');
-          return;
-        }
-      } else if (frequency === 'monthly') {
-        time = document.getElementById('monthlyCheckinTime').value;
-        monthlyDay = parseInt(document.getElementById('monthlyCheckinDay').value);
-        if (isNaN(monthlyDay) || monthlyDay < 1 || monthlyDay > 31) {
-          alert('Tanggal bulanan harus antara 1-31!');
-          return;
-        }
+      // Wallet tags
+      let walletTags = '';
+      if (checkin.wallets && checkin.wallets.length > 0) {
+        walletTags = `
+          <div class="wallet-tags">
+            ${checkin.wallets.map(wallet => `<span class="wallet-tag">${wallet}</span>`).join('')}
+          </div>
+        `;
       }
-
-      const checkin = {
-        id: editingCheckinId || Date.now(),
-        project,
-        type,
-        link,
-        wallets,
-        frequency,
-        time,
-        days,
-        monthlyDay,
-        notes,
-        lastChecked: null,
-        createdAt: new Date().toISOString()
-      };
-
-      // Save to Firebase
-      const checkins = await loadFromFirebase('checkins');
       
-      if (editingCheckinId) {
-        // Update existing check-in
-        const index = checkins.findIndex(c => c.id === editingCheckinId);
-        if (index !== -1) {
-          checkins[index] = checkin;
-        }
-      } else {
-        // Add new check-in
-        checkins.push(checkin);
+      // Frequency info
+      let frequencyInfo = '';
+      if (checkin.frequency === 'daily') {
+        frequencyInfo = `Harian - ${checkin.time}`;
+      } else if (checkin.frequency === 'weekly') {
+        const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const selectedDays = checkin.days.map(day => dayNames[parseInt(day)]);
+        frequencyInfo = `Mingguan - ${selectedDays.join(', ')} pukul ${checkin.time}`;
+      } else if (checkin.frequency === 'monthly') {
+        frequencyInfo = `Bulanan - Tanggal ${checkin.monthlyDay} pukul ${checkin.time}`;
       }
       
-      await saveToFirebase('checkins', checkins);
+      // Last checked info
+      let lastChecked = 'Belum pernah dicek';
+      if (checkin.lastChecked) {
+        const lastCheckedDate = new Date(checkin.lastChecked);
+        lastChecked = `Terakhir dicek: ${lastCheckedDate.toLocaleString()}`;
+      }
+      
+      card.innerHTML = `
+        <h3>
+          ${checkin.project}
+          <span class="status-badge" style="background: var(--primary);">${checkin.type}</span>
+          <span class="progress-badge" style="background: ${checkin.frequency === 'daily' ? 'var(--success)' : checkin.frequency === 'weekly' ? 'var(--warning)' : 'var(--secondary)'}">
+            ${checkin.frequency === 'daily' ? 'Harian' : checkin.frequency === 'weekly' ? 'Mingguan' : 'Bulanan'}
+          </span>
+        </h3>
+        
+        <div class="airdrop-meta">
+          <div class="airdrop-meta-item">
+            <strong><i class="fas fa-clock-rotate-left"></i> Frekuensi:</strong>
+            <span>${frequencyInfo}</span>
+          </div>
+          
+          <div class="airdrop-meta-item">
+            <strong><i class="fas fa-calendar-day"></i> ${lastChecked}</strong>
+          </div>
+        </div>
+        
+        ${walletTags}
+        
+        ${checkin.notes ? `<p style="margin: 10px 0; font-size: 0.9rem;"><i class="fas fa-note-sticky"></i> ${checkin.notes}</p>` : ''}
+        
+        <a href="${checkin.link}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; color: var(--primary);">
+          <i class="fas fa-link"></i> Buka Link
+        </a>
+        
+        <div class="airdrop-actions">
+          <button class="edit-btn" onclick="editCheckin(${checkin.id})">
+            <i class="fas fa-pen-to-square"></i> Edit
+          </button>
+          <button class="progress-btn" onclick="markCheckinDone(${checkin.id})">
+            <i class="fas fa-check"></i> Tandai Sudah Dicek
+          </button>
+          <button class="delete-btn" onclick="deleteCheckin(${checkin.id})">
+            <i class="fas fa-trash"></i> Hapus
+          </button>
+        </div>
+      `;
+      
+      checkinList.appendChild(card);
+    });
+    
+    document.getElementById('checkinResultsCount').textContent = `${checkins.length} check-in ditemukan`;
+  }
 
-      // Reset form
-      document.getElementById('newCheckinProject').value = '';
-      document.getElementById('newCheckinLink').value = '';
-      document.getElementById('newCheckinNotes').value = '';
+  async function editCheckin(id) {
+    const checkins = await loadFromFirebase('checkins');
+    const checkin = checkins.find(c => c.id === id);
+    
+    if (checkin) {
+      editingCheckinId = id;
+      document.getElementById('newCheckinProject').value = checkin.project;
+      document.getElementById('newCheckinType').value = checkin.type;
+      document.getElementById('newCheckinLink').value = checkin.link;
+      document.getElementById('newCheckinNotes').value = checkin.notes || '';
+      document.getElementById('submitCheckinBtn').innerHTML = '<i class="fas fa-pen-to-square"></i> Update Check-in';
+      
+      // Set frequency
+      document.querySelector(`input[name="checkinFrequencyType"][value="${checkin.frequency}"]`).checked = true;
+      
+      // Show appropriate fields
+      document.getElementById('dailyTimeContainer').style.display = 'none';
+      document.getElementById('weeklyOptionsContainer').style.display = 'none';
+      document.getElementById('monthlyOptionsContainer').style.display = 'none';
+      
+      if (checkin.frequency === 'daily') {
+        document.getElementById('dailyTimeContainer').style.display = 'block';
+        document.getElementById('newCheckinTime').value = checkin.time;
+      } else if (checkin.frequency === 'weekly') {
+        document.getElementById('weeklyOptionsContainer').style.display = 'block';
+        document.getElementById('weeklyCheckinTime').value = checkin.time;
+        // Reset day selection
+        document.querySelectorAll('.day-option').forEach(day => {
+          day.classList.remove('selected');
+        });
+        // Set selected days
+        checkin.days.forEach(day => {
+          const dayElement = document.querySelector(`.day-option[data-day="${day}"]`);
+          if (dayElement) {
+            dayElement.classList.add('selected');
+          }
+        });
+        updateSelectedDays();
+      } else if (checkin.frequency === 'monthly') {
+        document.getElementById('monthlyOptionsContainer').style.display = 'block';
+        document.getElementById('monthlyCheckinDay').value = checkin.monthlyDay;
+        document.getElementById('monthlyCheckinTime').value = checkin.time;
+      }
+      
+      // Reset wallet selection
       document.querySelectorAll('.wallet-option input[name="checkinWallet"]').forEach(checkbox => {
         checkbox.checked = false;
         checkbox.parentElement.classList.remove('selected');
       });
       
-      // Reset day selection for weekly
-      document.querySelectorAll('.day-option').forEach(day => {
-        day.classList.remove('selected');
+      // Set wallet selection
+      checkin.wallets.forEach(wallet => {
+        const checkbox = document.querySelector(`.wallet-option input[name="checkinWallet"][value="${wallet}"]`);
+        if (checkbox) {
+          checkbox.checked = true;
+          checkbox.parentElement.classList.add('selected');
+        }
       });
       
-      editingCheckinId = null;
-      document.getElementById('submitCheckinBtn').innerHTML = '<i class="fas fa-plus"></i> Tambah Check-in';
-      
-      // Update UI
+      // Scroll to form for better UX
+      document.querySelector('#checkin-tab .form-container').scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
+  async function markCheckinDone(id) {
+    const checkins = await loadFromFirebase('checkins');
+    const checkin = checkins.find(c => c.id === id);
+    
+    if (checkin) {
+      checkin.lastChecked = new Date().toISOString();
+      await saveToFirebase('checkins', checkins);
       loadCheckins();
     }
+  }
 
-    async function loadCheckins() {
-      const checkins = await loadFromFirebase('checkins');
-      
-      if (checkins.length === 0) {
-        document.getElementById('checkinList').innerHTML = `
-          <div class="empty-state">
-            <i class="fas fa-bell-slash"></i>
-            <p>Belum ada check-in yang dijadwalkan. Tambahkan check-in baru untuk memulai.</p>
-            <button onclick="document.querySelector('#checkin-tab .form-container').scrollIntoView({ behavior: 'smooth' })">
-              <i class="fas fa-plus"></i> Tambah Check-in
-            </button>
-          </div>
-        `;
-        return;
+  async function deleteCheckin(id) {
+    if (!confirm('Apakah Anda yakin ingin menghapus check-in ini?')) return;
+    
+    const checkins = await loadFromFirebase('checkins');
+    const updatedCheckins = checkins.filter(item => item.id !== id);
+    await saveToFirebase('checkins', updatedCheckins);
+    
+    loadCheckins();
+  }
+
+  async function filterCheckins() {
+    const projectFilter = document.getElementById('checkinProject').value.toLowerCase();
+    const typeFilter = document.getElementById('checkinType').value;
+    const frequencyFilter = document.getElementById('checkinFrequency').value;
+    
+    const checkins = await loadFromFirebase('checkins');
+    
+    let filtered = checkins.filter(checkin => {
+      // Project name filter
+      if (projectFilter && !checkin.project.toLowerCase().includes(projectFilter)) {
+        return false;
       }
       
-      renderCheckinList(checkins);
+      // Type filter
+      if (typeFilter && checkin.type !== typeFilter) {
+        return false;
+      }
+      
+      // Frequency filter
+      if (frequencyFilter && checkin.frequency !== frequencyFilter) {
+        return false;
+      }
+      
+      return true;
+    });
+    
+    renderCheckinList(filtered);
+    document.getElementById('checkinListTitle').textContent = 
+      `Daftar Check-in${frequencyFilter === 'daily' ? ' Harian' : frequencyFilter === 'weekly' ? ' Mingguan' : frequencyFilter === 'monthly' ? ' Bulanan' : ''}${projectFilter || typeFilter || frequencyFilter ? ' (Filter Aktif)' : ''}`;
+    document.getElementById('checkinResultsCount').textContent = `${filtered.length} check-in ditemukan`;
+  }
+
+  function resetCheckinFilters() {
+    document.getElementById('checkinProject').value = '';
+    document.getElementById('checkinType').value = '';
+    document.getElementById('checkinFrequency').value = '';
+    loadCheckins();
+  }
+
+  function checkForDueCheckins() {
+    const checkins = JSON.parse(localStorage.getItem('checkins') || '[]');
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentDay = now.getDay(); // 0 (Sunday) to 6 (Saturday)
+    const currentDate = now.getDate(); // 1-31
+    
+    checkins.forEach(checkin => {
+      if (checkin.frequency === 'daily') {
+        const [hour, minute] = checkin.time.split(':').map(Number);
+        
+        // If it's the scheduled time and not checked today
+        if (hour === currentHour && minute === currentMinute) {
+          if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
+            showNotification(`Waktunya check-in harian: ${checkin.project}`);
+          }
+        }
+      } else if (checkin.frequency === 'weekly') {
+        const [hour, minute] = checkin.time.split(':').map(Number);
+        const days = checkin.days.map(Number);
+        
+        // If today is one of the selected days and it's the scheduled time
+        if (days.includes(currentDay) && hour === currentHour && minute === currentMinute) {
+          if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
+            showNotification(`Waktunya check-in mingguan: ${checkin.project}`);
+          }
+        }
+      } else if (checkin.frequency === 'monthly') {
+        const [hour, minute] = checkin.time.split(':').map(Number);
+        
+        // If today is the selected date and it's the scheduled time
+        if (currentDate === checkin.monthlyDay && hour === currentHour && minute === currentMinute) {
+          if (!checkin.lastChecked || new Date(checkin.lastChecked).getMonth() !== now.getMonth()) {
+            showNotification(`Waktunya check-in bulanan: ${checkin.project}`);
+          }
+        }
+      }
+    });
+  }
+
+  /* ========== TIMER FUNCTIONS ========== */
+  async function addTimer() {
+    const project = document.getElementById('newTimerProject').value;
+    const link = document.getElementById('newTimerLink').value;
+    const interval = document.getElementById('newTimerInterval').value;
+    const notes = document.getElementById('newTimerNotes').value;
+
+    // Get selected wallets
+    const walletCheckboxes = document.querySelectorAll('.wallet-option input[name="timerWallet"]:checked');
+    const wallets = Array.from(walletCheckboxes).map(cb => cb.value);
+    
+    // Validate required fields
+    if (!project || !link || !interval || wallets.length === 0) {
+      alert('Nama proyek, link, interval, dan wallet wajib diisi!');
+      return;
     }
 
-    function renderCheckinList(checkins) {
-      const checkinList = document.getElementById('checkinList');
-      checkinList.innerHTML = '';
+    const timer = {
+      id: editingTimerId || Date.now(),
+      project,
+      link,
+      wallets,
+      interval: parseInt(interval),
+      nextCheck: new Date(Date.now() + parseInt(interval) * 60 * 60 * 1000).toISOString(),
+      notes,
+      createdAt: new Date().toISOString()
+    };
+
+    // Save to Firebase
+    const timers = await loadFromFirebase('timers');
+    
+    if (editingTimerId) {
+      // Update existing timer
+      const index = timers.findIndex(t => t.id === editingTimerId);
+      if (index !== -1) {
+        timers[index] = timer;
+      }
+    } else {
+      // Add new timer
+      timers.push(timer);
+    }
+    
+    await saveToFirebase('timers', timers);
+
+    // Reset form
+    document.getElementById('newTimerProject').value = '';
+    document.getElementById('newTimerLink').value = '';
+    document.getElementById('newTimerInterval').value = '4';
+    document.getElementById('newTimerNotes').value = '';
+    document.querySelectorAll('.wallet-option input[name="timerWallet"]').forEach(checkbox => {
+      checkbox.checked = false;
+      checkbox.parentElement.classList.remove('selected');
+    });
+    
+    editingTimerId = null;
+    document.getElementById('submitTimerBtn').innerHTML = '<i class="fas fa-plus"></i> Tambah Timer';
+    
+    // Update UI
+    loadTimers();
+  }
+
+  async function loadTimers() {
+    const timers = await loadFromFirebase('timers');
+    
+    if (timers.length === 0) {
+      document.getElementById('timerList').innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-clock"></i>
+          <p>Belum ada timer yang aktif. Tambahkan timer baru untuk memulai.</p>
+          <button onclick="document.querySelector('#timer-tab .form-container').scrollIntoView({ behavior: 'smooth' })">
+            <i class="fas fa-plus"></i> Tambah Timer
+          </button>
+        </div>
+      `;
+      return;
+    }
+    
+    renderTimerList(timers);
+  }
+
+  function renderTimerList(timers) {
+    const timerList = document.getElementById('timerList');
+    timerList.innerHTML = '';
+    
+    const now = new Date();
+    
+    timers.forEach(timer => {
+      const nextCheckDate = new Date(timer.nextCheck);
+      const timeLeft = nextCheckDate - now;
+      const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
+      const minutesLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
       
-      checkins.forEach(checkin => {
-        const card = document.createElement('div');
-        card.className = 'airdrop-card';
-        
-        // Wallet tags
-        let walletTags = '';
-        if (checkin.wallets && checkin.wallets.length > 0) {
-          walletTags = `
-            <div class="wallet-tags">
-              ${checkin.wallets.map(wallet => `<span class="wallet-tag">${wallet}</span>`).join('')}
-            </div>
-          `;
-        }
-        
-        // Frequency info
-        let frequencyInfo = '';
-        if (checkin.frequency === 'daily') {
-          frequencyInfo = `Harian - ${checkin.time}`;
-        } else if (checkin.frequency === 'weekly') {
-          const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-          const selectedDays = checkin.days.map(day => dayNames[parseInt(day)]);
-          frequencyInfo = `Mingguan - ${selectedDays.join(', ')} pukul ${checkin.time}`;
-        } else if (checkin.frequency === 'monthly') {
-          frequencyInfo = `Bulanan - Tanggal ${checkin.monthlyDay} pukul ${checkin.time}`;
-        }
-        
-        // Last checked info
-        let lastChecked = 'Belum pernah dicek';
-        if (checkin.lastChecked) {
-          const lastCheckedDate = new Date(checkin.lastChecked);
-          lastChecked = `Terakhir dicek: ${lastCheckedDate.toLocaleString()}`;
-        }
-        
-        card.innerHTML = `
+      let timeLeftText = '';
+      if (timeLeft > 0) {
+        timeLeftText = `Cek lagi dalam ${hoursLeft} jam ${minutesLeft} menit`;
+      } else {
+        timeLeftText = 'Sekarang bisa dicek!';
+      }
+      
+      // Calculate progress percentage for the progress bar
+      const progressPercentage = Math.max(0, Math.min(100, 100 - (timeLeft / (timer.interval * 60 * 60 * 1000) * 100)));
+      
+      // Wallet tags
+      let walletTags = '';
+      if (timer.wallets && timer.wallets.length > 0) {
+        walletTags = `
+          <div class="wallet-tags">
+            ${timer.wallets.map(wallet => `<span class="wallet-tag">${wallet}</span>`).join('')}
+          </div>
+        `;
+      }
+      
+      timerList.innerHTML += `
+        <div class="airdrop-card">
           <h3>
-            ${checkin.project}
-            <span class="status-badge" style="background: var(--primary);">${checkin.type}</span>
-            <span class="progress-badge" style="background: ${checkin.frequency === 'daily' ? 'var(--success)' : checkin.frequency === 'weekly' ? 'var(--warning)' : 'var(--secondary)'}">
-              ${checkin.frequency === 'daily' ? 'Harian' : checkin.frequency === 'weekly' ? 'Mingguan' : 'Bulanan'}
-            </span>
+            ${timer.project}
+            <span class="status-badge" style="background: var(--warning);">Setiap ${timer.interval} jam</span>
           </h3>
           
           <div class="airdrop-meta">
             <div class="airdrop-meta-item">
-              <strong><i class="fas fa-clock-rotate-left"></i> Frekuensi:</strong>
-              <span>${frequencyInfo}</span>
+              <strong><i class="fas fa-clock"></i> ${timeLeftText}</strong>
             </div>
             
             <div class="airdrop-meta-item">
-              <strong><i class="fas fa-calendar-day"></i> ${lastChecked}</strong>
+              <strong><i class="fas fa-calendar-day"></i> Cek berikutnya:</strong>
+              <span>${nextCheckDate.toLocaleString()}</span>
             </div>
+          </div>
+          
+          <div class="timer-progress">
+            <div class="timer-progress-bar" style="width: ${progressPercentage}%"></div>
           </div>
           
           ${walletTags}
           
-          ${checkin.notes ? `<p style="margin: 10px 0; font-size: 0.9rem;"><i class="fas fa-note-sticky"></i> ${checkin.notes}</p>` : ''}
+          ${timer.notes ? `<p style="margin: 10px 0; font-size: 0.9rem;"><i class="fas fa-note-sticky"></i> ${timer.notes}</p>` : ''}
           
-          <a href="${checkin.link}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; color: var(--primary);">
+          <a href="${timer.link}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; color: var(--primary);">
             <i class="fas fa-link"></i> Buka Link
           </a>
           
           <div class="airdrop-actions">
-            <button class="edit-btn" onclick="editCheckin(${checkin.id})">
+            <button class="edit-btn" onclick="editTimer(${timer.id})">
               <i class="fas fa-pen-to-square"></i> Edit
             </button>
-            <button class="progress-btn" onclick="markCheckinDone(${checkin.id})">
+            <button class="progress-btn" onclick="markTimerDone(${timer.id})">
               <i class="fas fa-check"></i> Tandai Sudah Dicek
             </button>
-            <button class="delete-btn" onclick="deleteCheckin(${checkin.id})">
+            <button class="delete-btn" onclick="deleteTimer(${timer.id})">
               <i class="fas fa-trash"></i> Hapus
             </button>
           </div>
-        `;
-        
-        checkinList.appendChild(card);
-      });
-      
-      document.getElementById('checkinResultsCount').textContent = `${checkins.length} check-in ditemukan`;
-    }
+        </div>
+      `;
+    });
+    
+    document.getElementById('timerResultsCount').textContent = `${timers.length} timer aktif`;
+  }
 
-    async function editCheckin(id) {
-      const checkins = await loadFromFirebase('checkins');
-      const checkin = checkins.find(c => c.id === id);
+  async function editTimer(id) {
+    const timers = await loadFromFirebase('timers');
+    const timer = timers.find(t => t.id === id);
+    
+    if (timer) {
+      editingTimerId = id;
+      document.getElementById('newTimerProject').value = timer.project;
+      document.getElementById('newTimerLink').value = timer.link;
+      document.getElementById('newTimerInterval').value = timer.interval;
+      document.getElementById('newTimerNotes').value = timer.notes || '';
+      document.getElementById('submitTimerBtn').innerHTML = '<i class="fas fa-pen-to-square"></i> Update Timer';
       
-      if (checkin) {
-        editingCheckinId = id;
-        document.getElementById('newCheckinProject').value = checkin.project;
-        document.getElementById('newCheckinType').value = checkin.type;
-        document.getElementById('newCheckinLink').value = checkin.link;
-        document.getElementById('newCheckinNotes').value = checkin.notes || '';
-        document.getElementById('submitCheckinBtn').innerHTML = '<i class="fas fa-pen-to-square"></i> Update Check-in';
-        
-        // Set frequency
-        document.querySelector(`input[name="checkinFrequencyType"][value="${checkin.frequency}"]`).checked = true;
-        
-        // Show appropriate fields
-        document.getElementById('dailyTimeContainer').style.display = 'none';
-        document.getElementById('weeklyOptionsContainer').style.display = 'none';
-        document.getElementById('monthlyOptionsContainer').style.display = 'none';
-        
-        if (checkin.frequency === 'daily') {
-          document.getElementById('dailyTimeContainer').style.display = 'block';
-          document.getElementById('newCheckinTime').value = checkin.time;
-        } else if (checkin.frequency === 'weekly') {
-          document.getElementById('weeklyOptionsContainer').style.display = 'block';
-          document.getElementById('weeklyCheckinTime').value = checkin.time;
-          // Reset day selection
-          document.querySelectorAll('.day-option').forEach(day => {
-            day.classList.remove('selected');
-          });
-          // Set selected days
-          checkin.days.forEach(day => {
-            const dayElement = document.querySelector(`.day-option[data-day="${day}"]`);
-            if (dayElement) {
-              dayElement.classList.add('selected');
-            }
-          });
-          updateSelectedDays();
-        } else if (checkin.frequency === 'monthly') {
-          document.getElementById('monthlyOptionsContainer').style.display = 'block';
-          document.getElementById('monthlyCheckinDay').value = checkin.monthlyDay;
-          document.getElementById('monthlyCheckinTime').value = checkin.time;
-        }
-        
-        // Reset wallet selection
-        document.querySelectorAll('.wallet-option input[name="checkinWallet"]').forEach(checkbox => {
-          checkbox.checked = false;
-          checkbox.parentElement.classList.remove('selected');
-        });
-        
-        // Set wallet selection
-        checkin.wallets.forEach(wallet => {
-          const checkbox = document.querySelector(`.wallet-option input[name="checkinWallet"][value="${wallet}"]`);
-          if (checkbox) {
-            checkbox.checked = true;
-            checkbox.parentElement.classList.add('selected');
-          }
-        });
-        
-        // Scroll to form for better UX
-        document.querySelector('#checkin-tab .form-container').scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-
-    async function markCheckinDone(id) {
-      const checkins = await loadFromFirebase('checkins');
-      const checkin = checkins.find(c => c.id === id);
-      
-      if (checkin) {
-        checkin.lastChecked = new Date().toISOString();
-        await saveToFirebase('checkins', checkins);
-        loadCheckins();
-      }
-    }
-
-    async function deleteCheckin(id) {
-      if (!confirm('Apakah Anda yakin ingin menghapus check-in ini?')) return;
-      
-      const checkins = await loadFromFirebase('checkins');
-      const updatedCheckins = checkins.filter(item => item.id !== id);
-      await saveToFirebase('checkins', updatedCheckins);
-      
-      loadCheckins();
-    }
-
-    async function filterCheckins() {
-      const projectFilter = document.getElementById('checkinProject').value.toLowerCase();
-      const typeFilter = document.getElementById('checkinType').value;
-      const frequencyFilter = document.getElementById('checkinFrequency').value;
-      
-      const checkins = await loadFromFirebase('checkins');
-      
-      let filtered = checkins.filter(checkin => {
-        // Project name filter
-        if (projectFilter && !checkin.project.toLowerCase().includes(projectFilter)) {
-          return false;
-        }
-        
-        // Type filter
-        if (typeFilter && checkin.type !== typeFilter) {
-          return false;
-        }
-        
-        // Frequency filter
-        if (frequencyFilter && checkin.frequency !== frequencyFilter) {
-          return false;
-        }
-        
-        return true;
-      });
-      
-      renderCheckinList(filtered);
-      document.getElementById('checkinListTitle').textContent = 
-        `Daftar Check-in${frequencyFilter === 'daily' ? ' Harian' : frequencyFilter === 'weekly' ? ' Mingguan' : frequencyFilter === 'monthly' ? ' Bulanan' : ''}${projectFilter || typeFilter || frequencyFilter ? ' (Filter Aktif)' : ''}`;
-      document.getElementById('checkinResultsCount').textContent = `${filtered.length} check-in ditemukan`;
-    }
-
-    function resetCheckinFilters() {
-      document.getElementById('checkinProject').value = '';
-      document.getElementById('checkinType').value = '';
-      document.getElementById('checkinFrequency').value = '';
-      loadCheckins();
-    }
-
-    function checkForDueCheckins() {
-      const checkins = JSON.parse(localStorage.getItem('checkins') || '[]');
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      const currentDay = now.getDay(); // 0 (Sunday) to 6 (Saturday)
-      const currentDate = now.getDate(); // 1-31
-      
-      checkins.forEach(checkin => {
-        if (checkin.frequency === 'daily') {
-          const [hour, minute] = checkin.time.split(':').map(Number);
-          
-          // If it's the scheduled time and not checked today
-          if (hour === currentHour && minute === currentMinute) {
-            if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
-              showNotification(`Waktunya check-in harian: ${checkin.project}`);
-            }
-          }
-        } else if (checkin.frequency === 'weekly') {
-          const [hour, minute] = checkin.time.split(':').map(Number);
-          const days = checkin.days.map(Number);
-          
-          // If today is one of the selected days and it's the scheduled time
-          if (days.includes(currentDay) && hour === currentHour && minute === currentMinute) {
-            if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
-              showNotification(`Waktunya check-in mingguan: ${checkin.project}`);
-            }
-          }
-        } else if (checkin.frequency === 'monthly') {
-          const [hour, minute] = checkin.time.split(':').map(Number);
-          
-          // If today is the selected date and it's the scheduled time
-          if (currentDate === checkin.monthlyDay && hour === currentHour && minute === currentMinute) {
-            if (!checkin.lastChecked || new Date(checkin.lastChecked).getMonth() !== now.getMonth()) {
-              showNotification(`Waktunya check-in bulanan: ${checkin.project}`);
-            }
-          }
-        }
-      });
-    }
-
-    /* ========== TIMER FUNCTIONS ========== */
-    async function addTimer() {
-      const project = document.getElementById('newTimerProject').value;
-      const link = document.getElementById('newTimerLink').value;
-      const interval = document.getElementById('newTimerInterval').value;
-      const notes = document.getElementById('newTimerNotes').value;
-
-      // Get selected wallets
-      const walletCheckboxes = document.querySelectorAll('.wallet-option input[name="timerWallet"]:checked');
-      const wallets = Array.from(walletCheckboxes).map(cb => cb.value);
-      
-      // Validate required fields
-      if (!project || !link || !interval || wallets.length === 0) {
-        alert('Nama proyek, link, interval, dan wallet wajib diisi!');
-        return;
-      }
-
-      const timer = {
-        id: editingTimerId || Date.now(),
-        project,
-        link,
-        wallets,
-        interval: parseInt(interval),
-        nextCheck: new Date(Date.now() + parseInt(interval) * 60 * 60 * 1000).toISOString(),
-        notes,
-        createdAt: new Date().toISOString()
-      };
-
-      // Save to Firebase
-      const timers = await loadFromFirebase('timers');
-      
-      if (editingTimerId) {
-        // Update existing timer
-        const index = timers.findIndex(t => t.id === editingTimerId);
-        if (index !== -1) {
-          timers[index] = timer;
-        }
-      } else {
-        // Add new timer
-        timers.push(timer);
-      }
-      
-      await saveToFirebase('timers', timers);
-
-      // Reset form
-      document.getElementById('newTimerProject').value = '';
-      document.getElementById('newTimerLink').value = '';
-      document.getElementById('newTimerInterval').value = '4';
-      document.getElementById('newTimerNotes').value = '';
+      // Reset wallet selection
       document.querySelectorAll('.wallet-option input[name="timerWallet"]').forEach(checkbox => {
         checkbox.checked = false;
         checkbox.parentElement.classList.remove('selected');
       });
       
-      editingTimerId = null;
-      document.getElementById('submitTimerBtn').innerHTML = '<i class="fas fa-plus"></i> Tambah Timer';
+      // Set wallet selection
+      timer.wallets.forEach(wallet => {
+        const checkbox = document.querySelector(`.wallet-option input[name="timerWallet"][value="${wallet}"]`);
+        if (checkbox) {
+          checkbox.checked = true;
+          checkbox.parentElement.classList.add('selected');
+        }
+      });
       
-      // Update UI
+      // Scroll to form for better UX
+      document.querySelector('#timer-tab .form-container').scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
+  async function markTimerDone(id) {
+    const timers = await loadFromFirebase('timers');
+    const timer = timers.find(t => t.id === id);
+    
+    if (timer) {
+      // Calculate next check time
+      timer.nextCheck = new Date(Date.now() + timer.interval * 60 * 60 * 1000).toISOString();
+      await saveToFirebase('timers', timers);
       loadTimers();
-    }
-
-    async function loadTimers() {
-      const timers = await loadFromFirebase('timers');
       
-      if (timers.length === 0) {
-        document.getElementById('timerList').innerHTML = `
-          <div class="empty-state">
-            <i class="fas fa-clock"></i>
-            <p>Belum ada timer yang aktif. Tambahkan timer baru untuk memulai.</p>
-            <button onclick="document.querySelector('#timer-tab .form-container').scrollIntoView({ behavior: 'smooth' })">
-              <i class="fas fa-plus"></i> Tambah Timer
-            </button>
-          </div>
-        `;
-        return;
-      }
-      
-      renderTimerList(timers);
-    }
-
-    function renderTimerList(timers) {
-      const timerList = document.getElementById('timerList');
-      timerList.innerHTML = '';
-      
+      // Show notification if the timer was overdue
       const now = new Date();
+      const nextCheckDate = new Date(timer.nextCheck);
+      if (now >= nextCheckDate) {
+        showNotification(`Timer: ${timer.project} sudah dicek. Akan diingatkan lagi dalam ${timer.interval} jam.`);
+      }
+    }
+  }
+
+  async function deleteTimer(id) {
+    if (!confirm('Apakah Anda yakin ingin menghapus timer ini?')) return;
+    
+    const timers = await loadFromFirebase('timers');
+    const updatedTimers = timers.filter(item => item.id !== id);
+    await saveToFirebase('timers', updatedTimers);
+    
+    loadTimers();
+  }
+
+  async function filterTimers() {
+    const projectFilter = document.getElementById('timerProject').value.toLowerCase();
+    
+    const timers = await loadFromFirebase('timers');
+    
+    let filtered = timers.filter(timer => {
+      // Project name filter
+      if (projectFilter && !timer.project.toLowerCase().includes(projectFilter)) {
+        return false;
+      }
       
-      timers.forEach(timer => {
-        const nextCheckDate = new Date(timer.nextCheck);
-        const timeLeft = nextCheckDate - now;
-        const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
-        const minutesLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+      return true;
+    });
+    
+    renderTimerList(filtered);
+    document.getElementById('timerListTitle').textContent = 
+      `Daftar Timer Aktif${projectFilter ? ' (Filter Aktif)' : ''}`;
+    document.getElementById('timerResultsCount').textContent = `${filtered.length} timer ditemukan`;
+  }
+
+  function resetTimerFilters() {
+    document.getElementById('timerProject').value = '';
+    loadTimers();
+  }
+
+  function checkForDueTimers() {
+    const timers = JSON.parse(localStorage.getItem('timers') || '[]');
+    const now = new Date();
+    
+    timers.forEach(timer => {
+      const nextCheck = new Date(timer.nextCheck);
+      
+      if (now >= nextCheck) {
+        showNotification(`Timer: Waktunya cek ${timer.project} lagi!`);
+      }
+    });
+  }
+
+  /* ========== SPOTLIGHT FUNCTIONS ========== */
+  async function toggleSpotlight(airdropId) {
+    const airdrops = await loadFromFirebase('airdrops');
+    const airdrop = airdrops.find(a => a.id === airdropId);
+    
+    if (airdrop) {
+      airdrop.spotlight = !airdrop.spotlight;
+      await saveToFirebase('airdrops', airdrops);
+      
+      // Update the UI
+      if (selectedDate) {
+        const dateStr = selectedDate.toISOString().split('T')[0];
+        showAirdropsForDate(dateStr);
+      } else {
+        filterAirdrops();
+      }
+      
+      // If on spotlight tab, refresh it
+      if (document.getElementById('spotlight-tab').classList.contains('active')) {
+        loadSpotlights();
+      }
+    }
+  }
+
+  async function loadSpotlights() {
+    const airdrops = await loadFromFirebase('airdrops');
+    const spotlights = airdrops.filter(a => a.spotlight);
+    
+    if (spotlights.length === 0) {
+      document.getElementById('spotlightList').innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-star"></i>
+          <p>Belum ada project di spotlight. Tambahkan bintang pada airdrop untuk menyimpannya di sini.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    renderSpotlightList(spotlights);
+  }
+
+  function renderSpotlightList(airdrops) {
+    const spotlightList = document.getElementById('spotlightList');
+    spotlightList.innerHTML = '';
+    
+    airdrops.forEach(airdrop => {
+      const card = document.createElement('div');
+      card.className = 'airdrop-card';
+      
+      // Status badge
+      const statusText = airdrop.status === 'confirmed' ? 'Confirmed' : 'Potensial';
+      const statusClass = airdrop.status === 'confirmed' ? 'status-confirmed' : 'status-potensial';
+      
+      // Progress badge
+      let progressText = '';
+      let progressClass = '';
+      switch(airdrop.progress) {
+        case 'not-started':
+          progressText = 'Belum Mulai';
+          progressClass = 'progress-not-started';
+          break;
+        case 'in-progress':
+          progressText = 'Dalam Pengerjaan';
+          progressClass = 'progress-in-progress';
+          break;
+        case 'completed':
+          progressText = 'Selesai';
+          progressClass = 'progress-completed';
+          break;
+      }
+      
+      // Funding badge
+      let fundingBadge = '';
+      if (airdrop.funding) {
+        let fundingClass = 'low-funding-badge';
+        if (airdrop.funding >= 50) fundingClass = 'high-funding-badge';
+        else if (airdrop.funding >= 10) fundingClass = 'medium-funding-badge';
         
-        let timeLeftText = '';
-        if (timeLeft > 0) {
-          timeLeftText = `Cek lagi dalam ${hoursLeft} jam ${minutesLeft} menit`;
-        } else {
-          timeLeftText = 'Sekarang bisa dicek!';
-        }
-        
-        // Calculate progress percentage for the progress bar
-        const progressPercentage = Math.max(0, Math.min(100, 100 - (timeLeft / (timer.interval * 60 * 60 * 1000) * 100)));
-        
-        // Wallet tags
-        let walletTags = '';
-        if (timer.wallets && timer.wallets.length > 0) {
-          walletTags = `
-            <div class="wallet-tags">
-              ${timer.wallets.map(wallet => `<span class="wallet-tag">${wallet}</span>`).join('')}
-            </div>
-          `;
-        }
-        
-        timerList.innerHTML += `
-          <div class="airdrop-card">
-            <h3>
-              ${timer.project}
-              <span class="status-badge" style="background: var(--warning);">Setiap ${timer.interval} jam</span>
-            </h3>
-            
-            <div class="airdrop-meta">
-              <div class="airdrop-meta-item">
-                <strong><i class="fas fa-clock"></i> ${timeLeftText}</strong>
-              </div>
-              
-              <div class="airdrop-meta-item">
-                <strong><i class="fas fa-calendar-day"></i> Cek berikutnya:</strong>
-                <span>${nextCheckDate.toLocaleString()}</span>
-              </div>
-            </div>
-            
-            <div class="timer-progress">
-              <div class="timer-progress-bar" style="width: ${progressPercentage}%"></div>
-            </div>
-            
-            ${walletTags}
-            
-            ${timer.notes ? `<p style="margin: 10px 0; font-size: 0.9rem;"><i class="fas fa-note-sticky"></i> ${timer.notes}</p>` : ''}
-            
-            <a href="${timer.link}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; color: var(--primary);">
-              <i class="fas fa-link"></i> Buka Link
-            </a>
-            
-            <div class="airdrop-actions">
-              <button class="edit-btn" onclick="editTimer(${timer.id})">
-                <i class="fas fa-pen-to-square"></i> Edit
-              </button>
-              <button class="progress-btn" onclick="markTimerDone(${timer.id})">
-                <i class="fas fa-check"></i> Tandai Sudah Dicek
-              </button>
-              <button class="delete-btn" onclick="deleteTimer(${timer.id})">
-                <i class="fas fa-trash"></i> Hapus
-              </button>
-            </div>
+        fundingBadge = `<span class="funding-badge ${fundingClass}">$${airdrop.funding}M</span>`;
+      }
+      
+      // Wallet tags
+      let walletTags = '';
+      if (airdrop.wallets && airdrop.wallets.length > 0) {
+        walletTags = `
+          <div class="wallet-tags">
+            ${airdrop.wallets.map(wallet => `<span class="wallet-tag">${wallet}</span>`).join('')}
           </div>
         `;
-      });
-      
-      document.getElementById('timerResultsCount').textContent = `${timers.length} timer aktif`;
-    }
-
-    async function editTimer(id) {
-      const timers = await loadFromFirebase('timers');
-      const timer = timers.find(t => t.id === id);
-      
-      if (timer) {
-        editingTimerId = id;
-        document.getElementById('newTimerProject').value = timer.project;
-        document.getElementById('newTimerLink').value = timer.link;
-        document.getElementById('newTimerInterval').value = timer.interval;
-        document.getElementById('newTimerNotes').value = timer.notes || '';
-        document.getElementById('submitTimerBtn').innerHTML = '<i class="fas fa-pen-to-square"></i> Update Timer';
-        
-        // Reset wallet selection
-        document.querySelectorAll('.wallet-option input[name="timerWallet"]').forEach(checkbox => {
-          checkbox.checked = false;
-          checkbox.parentElement.classList.remove('selected');
-        });
-        
-        // Set wallet selection
-        timer.wallets.forEach(wallet => {
-          const checkbox = document.querySelector(`.wallet-option input[name="timerWallet"][value="${wallet}"]`);
-          if (checkbox) {
-            checkbox.checked = true;
-            checkbox.parentElement.classList.add('selected');
-          }
-        });
-        
-        // Scroll to form for better UX
-        document.querySelector('#timer-tab .form-container').scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-
-    async function markTimerDone(id) {
-      const timers = await loadFromFirebase('timers');
-      const timer = timers.find(t => t.id === id);
-      
-      if (timer) {
-        // Calculate next check time
-        timer.nextCheck = new Date(Date.now() + timer.interval * 60 * 60 * 1000).toISOString();
-        await saveToFirebase('timers', timers);
-        loadTimers();
-        
-        // Show notification if the timer was overdue
-        const now = new Date();
-        const nextCheckDate = new Date(timer.nextCheck);
-        if (now >= nextCheckDate) {
-          showNotification(`Timer: ${timer.project} sudah dicek. Akan diingatkan lagi dalam ${timer.interval} jam.`);
-        }
-      }
-    }
-
-    async function deleteTimer(id) {
-      if (!confirm('Apakah Anda yakin ingin menghapus timer ini?')) return;
-      
-      const timers = await loadFromFirebase('timers');
-      const updatedTimers = timers.filter(item => item.id !== id);
-      await saveToFirebase('timers', updatedTimers);
-      
-      loadTimers();
-    }
-
-    async function filterTimers() {
-      const projectFilter = document.getElementById('timerProject').value.toLowerCase();
-      
-      const timers = await loadFromFirebase('timers');
-      
-      let filtered = timers.filter(timer => {
-        // Project name filter
-        if (projectFilter && !timer.project.toLowerCase().includes(projectFilter)) {
-          return false;
-        }
-        
-        return true;
-      });
-      
-      renderTimerList(filtered);
-      document.getElementById('timerListTitle').textContent = 
-        `Daftar Timer Aktif${projectFilter ? ' (Filter Aktif)' : ''}`;
-      document.getElementById('timerResultsCount').textContent = `${filtered.length} timer ditemukan`;
-    }
-
-    function resetTimerFilters() {
-      document.getElementById('timerProject').value = '';
-      loadTimers();
-    }
-
-    function checkForDueTimers() {
-      const timers = JSON.parse(localStorage.getItem('timers') || '[]');
-      const now = new Date();
-      
-      timers.forEach(timer => {
-        const nextCheck = new Date(timer.nextCheck);
-        
-        if (now >= nextCheck) {
-          showNotification(`Timer: Waktunya cek ${timer.project} lagi!`);
-        }
-      });
-    }
-
-    /* ========== SPOTLIGHT FUNCTIONS ========== */
-    async function toggleSpotlight(airdropId) {
-      const airdrops = await loadFromFirebase('airdrops');
-      const airdrop = airdrops.find(a => a.id === airdropId);
-      
-      if (airdrop) {
-        airdrop.spotlight = !airdrop.spotlight;
-        await saveToFirebase('airdrops', airdrops);
-        
-        // Update the UI
-        if (selectedDate) {
-          const dateStr = selectedDate.toISOString().split('T')[0];
-          showAirdropsForDate(dateStr);
-        } else {
-          filterAirdrops();
-        }
-        
-        // If on spotlight tab, refresh it
-        if (document.getElementById('spotlight-tab').classList.contains('active')) {
-          loadSpotlights();
-        }
-      }
-    }
-
-    async function loadSpotlights() {
-      const airdrops = await loadFromFirebase('airdrops');
-      const spotlights = airdrops.filter(a => a.spotlight);
-      
-      if (spotlights.length === 0) {
-        document.getElementById('spotlightList').innerHTML = `
-          <div class="empty-state">
-            <i class="fas fa-star"></i>
-            <p>Belum ada project di spotlight. Tambahkan bintang pada airdrop untuk menyimpannya di sini.</p>
-          </div>
-        `;
-        return;
       }
       
-      renderSpotlightList(spotlights);
-    }
-
-    function renderSpotlightList(airdrops) {
-      const spotlightList = document.getElementById('spotlightList');
-      spotlightList.innerHTML = '';
-      
-      airdrops.forEach(airdrop => {
-        const card = document.createElement('div');
-        card.className = 'airdrop-card';
+      // Build the card HTML
+      card.innerHTML = `
+        <h3>
+          <i class="fas fa-star" style="color: var(--warning);"></i>
+          ${airdrop.name}
+          <span class="status-badge ${statusClass}">${statusText}</span>
+          <span class="progress-badge ${progressClass}">${progressText}</span>
+          ${fundingBadge}
+        </h3>
         
-        // Status badge
-        const statusText = airdrop.status === 'confirmed' ? 'Confirmed' : 'Potensial';
-        const statusClass = airdrop.status === 'confirmed' ? 'status-confirmed' : 'status-potensial';
-        
-        // Progress badge
-        let progressText = '';
-        let progressClass = '';
-        switch(airdrop.progress) {
-          case 'not-started':
-            progressText = 'Belum Mulai';
-            progressClass = 'progress-not-started';
-            break;
-          case 'in-progress':
-            progressText = 'Dalam Pengerjaan';
-            progressClass = 'progress-in-progress';
-            break;
-          case 'completed':
-            progressText = 'Selesai';
-            progressClass = 'progress-completed';
-            break;
-        }
-        
-        // Funding badge
-        let fundingBadge = '';
-        if (airdrop.funding) {
-          let fundingClass = 'low-funding-badge';
-          if (airdrop.funding >= 50) fundingClass = 'high-funding-badge';
-          else if (airdrop.funding >= 10) fundingClass = 'medium-funding-badge';
-          
-          fundingBadge = `<span class="funding-badge ${fundingClass}">$${airdrop.funding}M</span>`;
-        }
-        
-        // Wallet tags
-        let walletTags = '';
-        if (airdrop.wallets && airdrop.wallets.length > 0) {
-          walletTags = `
-            <div class="wallet-tags">
-              ${airdrop.wallets.map(wallet => `<span class="wallet-tag">${wallet}</span>`).join('')}
-            </div>
-          `;
-        }
-        
-        // Build the card HTML
-        card.innerHTML = `
-          <h3>
-            <i class="fas fa-star" style="color: var(--warning);"></i>
-            ${airdrop.name}
-            <span class="status-badge ${statusClass}">${statusText}</span>
-            <span class="progress-badge ${progressClass}">${progressText}</span>
-            ${fundingBadge}
-          </h3>
-          
-          <div class="airdrop-meta">
-            <div class="airdrop-meta-item">
-              <strong><i class="fas fa-tag"></i> Kategori:</strong>
-              <span>${airdrop.category}</span>
-            </div>
-            
-            <div class="airdrop-meta-item">
-              <strong><i class="fas fa-calendar-day"></i> Tanggal:</strong>
-              <span>${airdrop.date}</span>
-            </div>
+        <div class="airdrop-meta">
+          <div class="airdrop-meta-item">
+            <strong><i class="fas fa-tag"></i> Kategori:</strong>
+            <span>${airdrop.category}</span>
           </div>
           
-          ${walletTags}
-          
-          ${airdrop.notes ? `<p style="margin: 10px 0; font-size: 0.9rem;"><i class="fas fa-note-sticky"></i> ${airdrop.notes}</p>` : ''}
-          
-          ${airdrop.link ? `<a href="${airdrop.link}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; color: var(--primary);"><i class="fas fa-link"></i> Buka Link</a>` : ''}
-          
-          <div class="airdrop-actions">
-            <button class="edit-btn" onclick="editAirdrop(${airdrop.id})">
-              <i class="fas fa-pen-to-square"></i> Edit
-            </button>
-            <button class="progress-btn" onclick="toggleSpotlight(${airdrop.id})">
-              <i class="fas fa-star"></i> Hapus dari Spotlight
-            </button>
+          <div class="airdrop-meta-item">
+            <strong><i class="fas fa-calendar-day"></i> Tanggal:</strong>
+            <span>${airdrop.date}</span>
           </div>
-        `;
+        </div>
         
-        spotlightList.appendChild(card);
-      });
-      
-      document.getElementById('spotlightResultsCount').textContent = `${airdrops.length} project spotlight`;
-    }
-
-    async function filterSpotlights() {
-      const projectFilter = document.getElementById('spotlightProject').value.toLowerCase();
-      const categoryFilter = document.getElementById('spotlightCategory').value;
-      
-      const airdrops = await loadFromFirebase('airdrops');
-      let spotlights = airdrops.filter(a => a.spotlight);
-      
-      let filtered = spotlights.filter(airdrop => {
-        // Project name filter
-        if (projectFilter && !airdrop.name.toLowerCase().includes(projectFilter)) {
-          return false;
-        }
+        ${walletTags}
         
-        // Category filter
-        if (categoryFilter && airdrop.category !== categoryFilter) {
-          return false;
-        }
+        ${airdrop.notes ? `<p style="margin: 10px 0; font-size: 0.9rem;"><i class="fas fa-note-sticky"></i> ${airdrop.notes}</p>` : ''}
         
-        return true;
-      });
+        ${airdrop.link ? `<a href="${airdrop.link}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; color: var(--primary);"><i class="fas fa-link"></i> Buka Link</a>` : ''}
+        
+        <div class="airdrop-actions">
+          <button class="edit-btn" onclick="editAirdrop(${airdrop.id})">
+            <i class="fas fa-pen-to-square"></i> Edit
+          </button>
+          <button class="progress-btn" onclick="toggleSpotlight(${airdrop.id})">
+            <i class="fas fa-star"></i> Hapus dari Spotlight
+          </button>
+        </div>
+      `;
       
-      renderSpotlightList(filtered);
-      document.getElementById('spotlightListTitle').textContent = 
-        `Project Spotlight${projectFilter || categoryFilter ? ' (Filter Aktif)' : ''}`;
-      document.getElementById('spotlightResultsCount').textContent = `${filtered.length} project ditemukan`;
-    }
+      spotlightList.appendChild(card);
+    });
+    
+    document.getElementById('spotlightResultsCount').textContent = `${airdrops.length} project spotlight`;
+  }
 
-    function resetSpotlightFilters() {
-      document.getElementById('spotlightProject').value = '';
-      document.getElementById('spotlightCategory').value = '';
-      loadSpotlights();
-    }
-
-    /* ========== NOTIFICATION FUNCTIONS ========== */
-    function showNotification(message) {
-      // Check if the browser supports notifications
-      if (!("Notification" in window)) {
-        console.log("Browser tidak mendukung desktop notification");
-        return;
+  async function filterSpotlights() {
+    const projectFilter = document.getElementById('spotlightProject').value.toLowerCase();
+    const categoryFilter = document.getElementById('spotlightCategory').value;
+    
+    const airdrops = await loadFromFirebase('airdrops');
+    let spotlights = airdrops.filter(a => a.spotlight);
+    
+    let filtered = spotlights.filter(airdrop => {
+      // Project name filter
+      if (projectFilter && !airdrop.name.toLowerCase().includes(projectFilter)) {
+        return false;
       }
-
-      // Check if notification permissions have already been granted
-      if (Notification.permission === "granted") {
-        // If it's okay let's create a notification
-        new Notification(message);
-      } else if (Notification.permission !== "denied") {
-        // Otherwise, we need to ask the user for permission
-        Notification.requestPermission().then(function (permission) {
-          // If the user accepts, let's create a notification
-          if (permission === "granted") {
-            new Notification(message);
-          }
-        });
+      
+      // Category filter
+      if (categoryFilter && airdrop.category !== categoryFilter) {
+        return false;
       }
+      
+      return true;
+    });
+    
+    renderSpotlightList(filtered);
+    document.getElementById('spotlightListTitle').textContent = 
+      `Project Spotlight${projectFilter || categoryFilter ? ' (Filter Aktif)' : ''}`;
+    document.getElementById('spotlightResultsCount').textContent = `${filtered.length} project ditemukan`;
+  }
+
+  function resetSpotlightFilters() {
+    document.getElementById('spotlightProject').value = '';
+    document.getElementById('spotlightCategory').value = '';
+    loadSpotlights();
+  }
+
+  /* ========== NOTIFICATION FUNCTIONS ========== */
+  function showNotification(message) {
+    // Check if the browser supports notifications
+    if (!("Notification" in window)) {
+      console.log("Browser tidak mendukung desktop notification");
+      return;
     }
-  </script>
+
+    // Check if notification permissions have already been granted
+    if (Notification.permission === "granted") {
+      // If it's okay let's create a notification
+      new Notification(message);
+    } else if (Notification.permission !== "denied") {
+      // Otherwise, we need to ask the user for permission
+      Notification.requestPermission().then(function (permission) {
+        // If the user accepts, let's create a notification
+        if (permission === "granted") {
+          new Notification(message);
+        }
+      });
+    }
+  }
+</script>
 </body>
 </html>
