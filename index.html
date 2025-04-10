@@ -6,7 +6,7 @@
   <title>Airdrop Tracker Ultimate</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <!-- Firebase SDK -->
+  <!-- Tambahkan Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
   
@@ -1590,94 +1590,6 @@
       dateTo: null
     };
 
-    // Initialize the app when DOM is loaded
-    document.addEventListener('DOMContentLoaded', async () => {
-      // Initialize Firebase listeners
-      setupFirebaseListeners();
-      
-      // Set today's date as default in the form
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('airdropDate').value = today;
-      
-      // Initialize calendar
-      renderCalendar();
-      
-      // Load filters from URL if any
-      loadFiltersFromURL();
-      
-      // Set up event listeners
-      setupEventListeners();
-      
-      // Initialize wallet selection
-      setupWalletSelection();
-
-      // Load initial data
-      await loadCheckins();
-      await loadTimers();
-      await loadSpotlights();
-
-      // Check for due check-ins and timers
-      checkForDueCheckins();
-      checkForDueTimers();
-
-      // Set up interval checks (every minute)
-      setInterval(() => {
-        checkForDueCheckins();
-        checkForDueTimers();
-      }, 60000);
-    });
-
-    // Set up Firebase realtime listeners
-    function setupFirebaseListeners() {
-      // Airdrops listener
-      database.ref('airdrops').on('value', (snapshot) => {
-        const airdrops = snapshot.val() || [];
-        updateStats(airdrops);
-        
-        // Update UI based on current view
-        if (selectedDate) {
-          const dateStr = selectedDate.toISOString().split('T')[0];
-          showAirdropsForDate(dateStr);
-        } else {
-          filterAirdrops();
-        }
-        
-        // Update spotlight if needed
-        if (document.getElementById('spotlight-tab').classList.contains('active')) {
-          loadSpotlights();
-        }
-      });
-      
-      // Checkins listener
-      database.ref('checkins').on('value', (snapshot) => {
-        const checkins = snapshot.val() || [];
-        if (document.getElementById('checkin-tab').classList.contains('active')) {
-          renderCheckinList(checkins);
-        }
-      });
-      
-      // Timers listener
-      database.ref('timers').on('value', (snapshot) => {
-        const timers = snapshot.val() || [];
-        if (document.getElementById('timer-tab').classList.contains('active')) {
-          renderTimerList(timers);
-        }
-      });
-    }
-
-    // Update statistics dashboard with Firebase data
-    function updateStats(airdrops) {
-      const total = airdrops.length;
-      const notStarted = airdrops.filter(a => a.progress === 'not-started').length;
-      const inProgress = airdrops.filter(a => a.progress === 'in-progress').length;
-      const completed = airdrops.filter(a => a.progress === 'completed').length;
-      
-      document.getElementById('totalAirdrops').textContent = total;
-      document.getElementById('notStartedAirdrops').textContent = notStarted;
-      document.getElementById('inProgressAirdrops').textContent = inProgress;
-      document.getElementById('completedAirdrops').textContent = completed;
-    }
-
     // Fungsi untuk menyimpan data ke Firebase
     async function saveToFirebase(path, data) {
       try {
@@ -1698,6 +1610,137 @@
         console.error("Error loading from Firebase:", error);
         return [];
       }
+    }
+
+    // Initialize the app when DOM is loaded
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Set today's date as default in the form
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('airdropDate').value = today;
+      
+      // Initialize calendar
+      renderCalendar();
+      
+      // Load airdrops from Firebase
+      await loadAirdrops();
+      
+      // Load filters from URL if any
+      loadFiltersFromURL();
+      
+      // Set up event listeners
+      setupEventListeners();
+      
+      // Initialize wallet selection
+      setupWalletSelection();
+      
+      // Update stats
+      updateStats();
+
+      // Load check-ins and timers from Firebase
+      await loadCheckins();
+      await loadTimers();
+      await loadSpotlights();
+
+      // Check for due check-ins and timers
+      checkForDueCheckins();
+      checkForDueTimers();
+
+      // Set up interval checks (every minute)
+      setInterval(() => {
+        checkForDueCheckins();
+        checkForDueTimers();
+      }, 60000);
+    });
+
+    // Update statistics dashboard
+    function updateStats() {
+      const airdrops = JSON.parse(localStorage.getItem('airdrops') || '[]');
+      
+      const total = airdrops.length;
+      const notStarted = airdrops.filter(a => a.progress === 'not-started').length;
+      const inProgress = airdrops.filter(a => a.progress === 'in-progress').length;
+      const completed = airdrops.filter(a => a.progress === 'completed').length;
+      
+      document.getElementById('totalAirdrops').textContent = total;
+      document.getElementById('notStartedAirdrops').textContent = notStarted;
+      document.getElementById('inProgressAirdrops').textContent = inProgress;
+      document.getElementById('completedAirdrops').textContent = completed;
+    }
+
+    // Set up wallet selection UI
+    function setupWalletSelection() {
+      const walletOptions = document.querySelectorAll('.wallet-option input');
+      
+      walletOptions.forEach(option => {
+        option.addEventListener('change', function() {
+          const parent = this.parentElement;
+          if (this.checked) {
+            parent.classList.add('selected');
+          } else {
+            parent.classList.remove('selected');
+          }
+        });
+      });
+
+      // Setup check-in frequency toggle
+      const frequencyRadios = document.querySelectorAll('input[name="checkinFrequencyType"]');
+      frequencyRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+          document.getElementById('dailyTimeContainer').style.display = 'none';
+          document.getElementById('weeklyOptionsContainer').style.display = 'none';
+          document.getElementById('monthlyOptionsContainer').style.display = 'none';
+          
+          if (this.value === 'daily') {
+            document.getElementById('dailyTimeContainer').style.display = 'block';
+          } else if (this.value === 'weekly') {
+            document.getElementById('weeklyOptionsContainer').style.display = 'block';
+          } else if (this.value === 'monthly') {
+            document.getElementById('monthlyOptionsContainer').style.display = 'block';
+          }
+        });
+      });
+
+      // Setup day selection for weekly check-ins
+      const dayOptions = document.querySelectorAll('.day-option');
+      dayOptions.forEach(day => {
+        day.addEventListener('click', function() {
+          this.classList.toggle('selected');
+          updateSelectedDays();
+        });
+      });
+    }
+
+    function updateSelectedDays() {
+      const selectedDays = Array.from(document.querySelectorAll('.day-option.selected'))
+        .map(day => day.getAttribute('data-day'));
+      document.getElementById('selectedDays').value = selectedDays.join(',');
+    }
+
+    // Set up all event listeners
+    function setupEventListeners() {
+      // Calendar navigation
+      document.getElementById('prevMonth').addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar();
+      });
+      
+      document.getElementById('nextMonth').addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar();
+      });
+      
+      // Form submission on Enter key
+      document.getElementById('airdropName').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addAirdrop();
+      });
+
+      document.getElementById('newCheckinProject').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addCheckin();
+      });
+
+      document.getElementById('newTimerProject').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addTimer();
+      });
     }
 
     // Switch between tabs
@@ -1997,6 +2040,164 @@
       }
     }
 
+    // Add new airdrop or update existing
+    async function addAirdrop() {
+      const name = document.getElementById('airdropName').value;
+      const category = document.getElementById('airdropCategory').value;
+      const date = document.getElementById('airdropDate').value;
+      const status = document.getElementById('airdropStatus').value;
+      const progress = document.getElementById('airdropProgress').value;
+      const funding = document.getElementById('airdropFunding').value;
+      const link = document.getElementById('airdropLink').value;
+      const notes = document.getElementById('airdropNotes').value;
+
+      // Get selected wallets
+      const walletCheckboxes = document.querySelectorAll('.wallet-option input[name="wallet"]:checked');
+      const wallets = Array.from(walletCheckboxes).map(cb => cb.value);
+      
+      // Validate required fields
+      if (!name || !date || !status || !progress) {
+        alert('Nama proyek, tanggal, status dan progres wajib diisi!');
+        return;
+      }
+      
+      // Validate at least one wallet is selected
+      if (wallets.length === 0) {
+        alert('Pilih minimal satu Nama/Wallet!');
+        return;
+      }
+
+      const airdrop = {
+        id: editingAirdropId || Date.now(),
+        name,
+        category,
+        wallets,
+        date,
+        status,
+        progress,
+        funding: funding ? parseInt(funding) : null,
+        link,
+        notes,
+        lastUpdated: new Date().toISOString(),
+        spotlight: false
+      };
+
+      // Save to Firebase
+      const airdrops = await loadFromFirebase('airdrops');
+      
+      if (editingAirdropId) {
+        // Update existing airdrop
+        const index = airdrops.findIndex(a => a.id === editingAirdropId);
+        if (index !== -1) {
+          airdrop.spotlight = airdrops[index].spotlight; // Preserve spotlight status
+          airdrops[index] = airdrop;
+        }
+      } else {
+        // Add new airdrop
+        airdrops.push(airdrop);
+      }
+      
+      await saveToFirebase('airdrops', airdrops);
+
+      // Reset form and editing state
+      resetForm();
+      
+      // Update UI
+      renderCalendar();
+      updateStats();
+      
+      // Show airdrops for the selected date or all
+      if (selectedDate) {
+        const dateStr = selectedDate.toISOString().split('T')[0];
+        showAirdropsForDate(dateStr);
+      } else {
+        filterAirdrops();
+      }
+    }
+
+    // Reset the form to default state
+    function resetForm() {
+      document.getElementById('airdropName').value = '';
+      document.getElementById('airdropDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('airdropFunding').value = '';
+      document.getElementById('airdropLink').value = '';
+      document.getElementById('airdropNotes').value = '';
+      document.getElementById('airdropStatus').value = 'confirmed';
+      document.getElementById('airdropProgress').value = 'not-started';
+      document.getElementById('airdropCategory').value = 'testnet';
+      
+      // Reset wallet selection
+      document.querySelectorAll('.wallet-option input[name="wallet"]').forEach(checkbox => {
+        checkbox.checked = false;
+        checkbox.parentElement.classList.remove('selected');
+      });
+      
+      editingAirdropId = null;
+      document.getElementById('submitAirdropBtn').innerHTML = '<i class="fas fa-plus"></i> Tambah Airdrop';
+    }
+
+    // Prepare form for editing an airdrop
+    async function editAirdrop(id) {
+      const airdrops = await loadFromFirebase('airdrops');
+      const airdrop = airdrops.find(a => a.id === id);
+      
+      if (airdrop) {
+        editingAirdropId = id;
+        document.getElementById('airdropName').value = airdrop.name;
+        document.getElementById('airdropCategory').value = airdrop.category;
+        document.getElementById('airdropDate').value = airdrop.date;
+        document.getElementById('airdropStatus').value = airdrop.status;
+        document.getElementById('airdropProgress').value = airdrop.progress;
+        document.getElementById('airdropFunding').value = airdrop.funding || '';
+        document.getElementById('airdropLink').value = airdrop.link || '';
+        document.getElementById('airdropNotes').value = airdrop.notes || '';
+        document.getElementById('submitAirdropBtn').innerHTML = '<i class="fas fa-pen-to-square"></i> Update Airdrop';
+        
+        // Reset wallet selection
+        document.querySelectorAll('.wallet-option input[name="wallet"]').forEach(checkbox => {
+          checkbox.checked = false;
+          checkbox.parentElement.classList.remove('selected');
+        });
+        
+        // Set wallet selection
+        airdrop.wallets.forEach(wallet => {
+          const checkbox = document.querySelector(`.wallet-option input[name="wallet"][value="${wallet}"]`);
+          if (checkbox) {
+            checkbox.checked = true;
+            checkbox.parentElement.classList.add('selected');
+          }
+        });
+        
+        // Scroll to form for better UX
+        document.querySelector('.form-container').scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    // Update progress status of an airdrop
+    async function updateProgress(id, newProgress) {
+      const airdrops = await loadFromFirebase('airdrops');
+      const airdrop = airdrops.find(a => a.id === id);
+      
+      if (airdrop) {
+        airdrop.progress = newProgress;
+        airdrop.lastUpdated = new Date().toISOString();
+        await saveToFirebase('airdrops', airdrops);
+        
+        // Refresh the view
+        if (selectedDate) {
+          const dateStr = selectedDate.toISOString().split('T')[0];
+          renderCalendar();
+          showAirdropsForDate(dateStr);
+        } else {
+          renderCalendar();
+          filterAirdrops();
+        }
+        
+        // Update stats
+        updateStats();
+      }
+    }
+
     // Get airdrops by specific date
     async function getAirdropsByDate(date) {
       const airdrops = await loadFromFirebase('airdrops');
@@ -2205,6 +2406,9 @@
         filterAirdrops();
       }
       
+      // Update stats
+      updateStats();
+
       // Update spotlight if needed
       if (document.getElementById('spotlight-tab').classList.contains('active')) {
         loadSpotlights();
@@ -2532,46 +2736,43 @@
     }
 
     function checkForDueCheckins() {
+      const checkins = JSON.parse(localStorage.getItem('checkins') || '[]');
       const now = new Date();
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
       const currentDay = now.getDay(); // 0 (Sunday) to 6 (Saturday)
       const currentDate = now.getDate(); // 1-31
       
-      database.ref('checkins').once('value').then((snapshot) => {
-        const checkins = snapshot.val() || [];
-        
-        checkins.forEach(checkin => {
-          if (checkin.frequency === 'daily') {
-            const [hour, minute] = checkin.time.split(':').map(Number);
-            
-            // If it's the scheduled time and not checked today
-            if (hour === currentHour && minute === currentMinute) {
-              if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
-                showNotification(`Waktunya check-in harian: ${checkin.project}`);
-              }
-            }
-          } else if (checkin.frequency === 'weekly') {
-            const [hour, minute] = checkin.time.split(':').map(Number);
-            const days = checkin.days.map(Number);
-            
-            // If today is one of the selected days and it's the scheduled time
-            if (days.includes(currentDay) && hour === currentHour && minute === currentMinute) {
-              if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
-                showNotification(`Waktunya check-in mingguan: ${checkin.project}`);
-              }
-            }
-          } else if (checkin.frequency === 'monthly') {
-            const [hour, minute] = checkin.time.split(':').map(Number);
-            
-            // If today is the selected date and it's the scheduled time
-            if (currentDate === checkin.monthlyDay && hour === currentHour && minute === currentMinute) {
-              if (!checkin.lastChecked || new Date(checkin.lastChecked).getMonth() !== now.getMonth()) {
-                showNotification(`Waktunya check-in bulanan: ${checkin.project}`);
-              }
+      checkins.forEach(checkin => {
+        if (checkin.frequency === 'daily') {
+          const [hour, minute] = checkin.time.split(':').map(Number);
+          
+          // If it's the scheduled time and not checked today
+          if (hour === currentHour && minute === currentMinute) {
+            if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
+              showNotification(`Waktunya check-in harian: ${checkin.project}`);
             }
           }
-        });
+        } else if (checkin.frequency === 'weekly') {
+          const [hour, minute] = checkin.time.split(':').map(Number);
+          const days = checkin.days.map(Number);
+          
+          // If today is one of the selected days and it's the scheduled time
+          if (days.includes(currentDay) && hour === currentHour && minute === currentMinute) {
+            if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
+              showNotification(`Waktunya check-in mingguan: ${checkin.project}`);
+            }
+          }
+        } else if (checkin.frequency === 'monthly') {
+          const [hour, minute] = checkin.time.split(':').map(Number);
+          
+          // If today is the selected date and it's the scheduled time
+          if (currentDate === checkin.monthlyDay && hour === currentHour && minute === currentMinute) {
+            if (!checkin.lastChecked || new Date(checkin.lastChecked).getMonth() !== now.getMonth()) {
+              showNotification(`Waktunya check-in bulanan: ${checkin.project}`);
+            }
+          }
+        }
       });
     }
 
@@ -2822,17 +3023,15 @@
     }
 
     function checkForDueTimers() {
-      database.ref('timers').once('value').then((snapshot) => {
-        const timers = snapshot.val() || [];
-        const now = new Date();
+      const timers = JSON.parse(localStorage.getItem('timers') || '[]');
+      const now = new Date();
+      
+      timers.forEach(timer => {
+        const nextCheck = new Date(timer.nextCheck);
         
-        timers.forEach(timer => {
-          const nextCheck = new Date(timer.nextCheck);
-          
-          if (now >= nextCheck) {
-            showNotification(`Timer: Waktunya cek ${timer.project} lagi!`);
-          }
-        });
+        if (now >= nextCheck) {
+          showNotification(`Timer: Waktunya cek ${timer.project} lagi!`);
+        }
       });
     }
 
