@@ -6,7 +6,7 @@
   <title>Airdrop Tracker Ultimate</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <!-- Tambahkan Firebase SDK -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
   
@@ -184,6 +184,10 @@
 
     .tabs.spotlight-active::after {
       transform: translateX(400%);
+    }
+
+    .tabs.settings-active::after {
+      transform: translateX(500%);
     }
 
     .tab {
@@ -894,6 +898,27 @@
       color: white;
     }
 
+    /* Settings Section */
+    .settings-section {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .settings-section h3 {
+      margin-bottom: 15px;
+      color: var(--primary-dark);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .settings-section h3 i {
+      color: var(--primary);
+    }
+
     /* Responsive Adjustments */
     @media (max-width: 1200px) {
       .container {
@@ -1063,6 +1088,9 @@
       </div>
       <div class="tab" onclick="switchTab('spotlight')">
         <i class="fas fa-star"></i> Spotlight
+      </div>
+      <div class="tab" onclick="switchTab('settings')">
+        <i class="fas fa-cog"></i> Settings
       </div>
     </div>
 
@@ -1556,10 +1584,22 @@
         </div>
       </div>
     </div>
+
+    <!-- Settings Tab Content -->
+    <div id="settings-tab" class="tab-content">
+      <div class="settings-section">
+        <h3><i class="fas fa-paper-plane"></i> Telegram Notification Test</h3>
+        <p>Kirim pesan test ke Telegram untuk memverifikasi integrasi</p>
+        <button class="search-btn" onclick="testTelegramNotification()">
+          <i class="fas fa-paper-plane"></i> Kirim Test Notifikasi
+        </button>
+        <div id="telegramTestResult" style="margin-top: 15px;"></div>
+      </div>
+    </div>
   </div>
 
   <script>
-    // Firebase configuration
+    // Firebase configuration with Telegram integration
     const firebaseConfig = {
       apiKey: "AIzaSyCsk1IlWiY-IdwW8SI3N4eCMROElTfmZk0",
       authDomain: "airdrop-tracker-ultimate.firebaseapp.com",
@@ -1568,7 +1608,11 @@
       messagingSenderId: "44720743388",
       appId: "1:44720743388:web:48b179bf2d3a4d87926519",
       measurementId: "G-1WQP5V7CPW",
-      databaseURL: "https://airdrop-tracker-ultimate-default-rtdb.asia-southeast1.firebasedatabase.app/"
+      databaseURL: "https://airdrop-tracker-ultimate-default-rtdb.asia-southeast1.firebasedatabase.app/",
+      telegram: {
+        botToken: '7806238605:AAEFrEheDskriUo3ePNfvdiyYCtPa5Mbvw0',
+        chatId: '840076617'
+      }
     };
 
     // Initialize Firebase
@@ -1590,6 +1634,69 @@
       dateTo: null
     };
 
+    // ==================== TELEGRAM FUNCTIONS ====================
+    
+    async function sendTelegramNotification(message) {
+      try {
+        const config = firebaseConfig.telegram;
+        
+        // Validate configuration
+        if (!config || !config.botToken || !config.chatId) {
+          console.error('Telegram bot configuration is incomplete');
+          return false;
+        }
+        
+        const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            chat_id: config.chatId,
+            text: message,
+            parse_mode: 'HTML'
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Failed to send Telegram notification:', errorData);
+          return false;
+        }
+        
+        console.log('Telegram notification sent successfully');
+        return true;
+      } catch (error) {
+        console.error('Error sending Telegram notification:', error);
+        return false;
+      }
+    }
+
+    async function testTelegramNotification() {
+      const resultElement = document.getElementById('telegramTestResult');
+      resultElement.innerHTML = '<p><i class="fas fa-spinner fa-spin"></i> Mengirim notifikasi test...</p>';
+      
+      const message = '🔔 <b>Test Notification</b>\n' +
+                     'Ini adalah notifikasi test dari Airdrop Tracker Ultimate.\n' +
+                     '🕒 ' + new Date().toLocaleString();
+      
+      try {
+        const success = await sendTelegramNotification(message);
+        
+        if (success) {
+          resultElement.innerHTML = '<p style="color: var(--success);"><i class="fas fa-check-circle"></i> Notifikasi test berhasil dikirim! Silakan cek Telegram Anda.</p>';
+        } else {
+          resultElement.innerHTML = '<p style="color: var(--danger);"><i class="fas fa-times-circle"></i> Gagal mengirim notifikasi test. Periksa console untuk detail error.</p>';
+        }
+      } catch (error) {
+        console.error('Test notification error:', error);
+        resultElement.innerHTML = `<p style="color: var(--danger);"><i class="fas fa-times-circle"></i> Error: ${error.message}</p>`;
+      }
+    }
+
+    // ==================== GENERAL FUNCTIONS ====================
+    
     // Fungsi untuk menyimpan data ke Firebase
     async function saveToFirebase(path, data) {
       try {
@@ -1766,7 +1873,7 @@
       
       // Update tab indicator
       const tabsContainer = document.querySelector('.tabs');
-      tabsContainer.classList.remove('tracker-active', 'calendar-active', 'checkin-active', 'timer-active', 'spotlight-active');
+      tabsContainer.classList.remove('tracker-active', 'calendar-active', 'checkin-active', 'timer-active', 'spotlight-active', 'settings-active');
       tabsContainer.classList.add(`${tabName}-active`);
 
       // Load appropriate data when switching tabs
@@ -2744,41 +2851,54 @@
       loadCheckins();
     }
 
-    function checkForDueCheckins() {
-      const checkins = JSON.parse(localStorage.getItem('checkins') || '[]');
+    async function checkForDueCheckins() {
+      const checkins = await loadFromFirebase('checkins');
       const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      const currentDay = now.getDay(); // 0 (Sunday) to 6 (Saturday)
-      const currentDate = now.getDate(); // 1-31
       
       checkins.forEach(checkin => {
         if (checkin.frequency === 'daily') {
           const [hour, minute] = checkin.time.split(':').map(Number);
           
-          // If it's the scheduled time and not checked today
-          if (hour === currentHour && minute === currentMinute) {
+          if (hour === now.getHours() && minute === now.getMinutes()) {
             if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
-              showNotification(`Waktunya check-in harian: ${checkin.project}`);
+              const message = `⏰ <b>Waktunya Check-in Harian!</b>\n` +
+                             `📌 Project: ${checkin.project}\n` +
+                             `🔗 Link: ${checkin.link}\n` +
+                             `🕒 Waktu: ${checkin.time}`;
+              
+              showNotification(message);
             }
           }
         } else if (checkin.frequency === 'weekly') {
           const [hour, minute] = checkin.time.split(':').map(Number);
           const days = checkin.days.map(Number);
           
-          // If today is one of the selected days and it's the scheduled time
-          if (days.includes(currentDay) && hour === currentHour && minute === currentMinute) {
+          if (days.includes(now.getDay()) && hour === now.getHours() && minute === now.getMinutes()) {
             if (!checkin.lastChecked || new Date(checkin.lastChecked).toDateString() !== now.toDateString()) {
-              showNotification(`Waktunya check-in mingguan: ${checkin.project}`);
+              const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+              const dayName = dayNames[now.getDay()];
+              
+              const message = `⏰ <b>Waktunya Check-in Mingguan!</b>\n` +
+                             `📌 Project: ${checkin.project}\n` +
+                             `📅 Hari: ${dayName}\n` +
+                             `🔗 Link: ${checkin.link}\n` +
+                             `🕒 Waktu: ${checkin.time}`;
+              
+              showNotification(message);
             }
           }
         } else if (checkin.frequency === 'monthly') {
           const [hour, minute] = checkin.time.split(':').map(Number);
           
-          // If today is the selected date and it's the scheduled time
-          if (currentDate === checkin.monthlyDay && hour === currentHour && minute === currentMinute) {
+          if (now.getDate() === checkin.monthlyDay && hour === now.getHours() && minute === now.getMinutes()) {
             if (!checkin.lastChecked || new Date(checkin.lastChecked).getMonth() !== now.getMonth()) {
-              showNotification(`Waktunya check-in bulanan: ${checkin.project}`);
+              const message = `⏰ <b>Waktunya Check-in Bulanan!</b>\n` +
+                             `📌 Project: ${checkin.project}\n` +
+                             `📅 Tanggal: ${checkin.monthlyDay}\n` +
+                             `🔗 Link: ${checkin.link}\n` +
+                             `🕒 Waktu: ${checkin.time}`;
+              
+              showNotification(message);
             }
           }
         }
@@ -3031,15 +3151,21 @@
       loadTimers();
     }
 
-    function checkForDueTimers() {
-      const timers = JSON.parse(localStorage.getItem('timers') || '[]');
+    async function checkForDueTimers() {
+      const timers = await loadFromFirebase('timers');
       const now = new Date();
       
       timers.forEach(timer => {
         const nextCheck = new Date(timer.nextCheck);
         
         if (now >= nextCheck) {
-          showNotification(`Timer: Waktunya cek ${timer.project} lagi!`);
+          const message = `⏳ <b>Timer Habis!</b>\n` +
+                         `📌 Project: ${timer.project}\n` +
+                         `🔗 Link: ${timer.link}\n` +
+                         `🔄 Interval: Setiap ${timer.interval} jam\n` +
+                         `⏱️ Waktu berikutnya: ${new Date(Date.now() + timer.interval * 60 * 60 * 1000).toLocaleString()}`;
+          
+          showNotification(message);
         }
       });
     }
@@ -3214,25 +3340,26 @@
 
     /* ========== NOTIFICATION FUNCTIONS ========== */
     function showNotification(message) {
-      // Check if the browser supports notifications
-      if (!("Notification" in window)) {
-        console.log("Browser tidak mendukung desktop notification");
-        return;
+      // Notifikasi browser
+      if ("Notification" in window) {
+        if (Notification.permission === "granted") {
+          new Notification(message);
+        } else if (Notification.permission !== "denied") {
+          Notification.requestPermission().then(permission => {
+            if (permission === "granted") new Notification(message);
+          });
+        }
       }
-
-      // Check if notification permissions have already been granted
-      if (Notification.permission === "granted") {
-        // If it's okay let's create a notification
-        new Notification(message);
-      } else if (Notification.permission !== "denied") {
-        // Otherwise, we need to ask the user for permission
-        Notification.requestPermission().then(function (permission) {
-          // If the user accepts, let's create a notification
-          if (permission === "granted") {
-            new Notification(message);
-          }
-        });
-      }
+      
+      // Format pesan untuk Telegram
+      const telegramMessage = `🔔 <b>Airdrop Tracker Notification</b>\n` +
+                             `${message}\n` +
+                             `🕒 ${new Date().toLocaleString()}`;
+      
+      // Kirim ke Telegram
+      sendTelegramNotification(telegramMessage).catch(error => {
+        console.error('Gagal mengirim notifikasi ke Telegram:', error);
+      });
     }
   </script>
 </body>
