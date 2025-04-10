@@ -1653,18 +1653,27 @@
     });
 
     // Update statistics dashboard
-    function updateStats() {
-      const airdrops = JSON.parse(localStorage.getItem('airdrops') || '[]');
-      
-      const total = airdrops.length;
-      const notStarted = airdrops.filter(a => a.progress === 'not-started').length;
-      const inProgress = airdrops.filter(a => a.progress === 'in-progress').length;
-      const completed = airdrops.filter(a => a.progress === 'completed').length;
-      
-      document.getElementById('totalAirdrops').textContent = total;
-      document.getElementById('notStartedAirdrops').textContent = notStarted;
-      document.getElementById('inProgressAirdrops').textContent = inProgress;
-      document.getElementById('completedAirdrops').textContent = completed;
+    async function updateStats() {
+      try {
+        const airdrops = await loadFromFirebase('airdrops') || [];
+        
+        const total = airdrops.length;
+        const notStarted = airdrops.filter(a => a.progress === 'not-started').length;
+        const inProgress = airdrops.filter(a => a.progress === 'in-progress').length;
+        const completed = airdrops.filter(a => a.progress === 'completed').length;
+        
+        document.getElementById('totalAirdrops').textContent = total;
+        document.getElementById('notStartedAirdrops').textContent = notStarted;
+        document.getElementById('inProgressAirdrops').textContent = inProgress;
+        document.getElementById('completedAirdrops').textContent = completed;
+      } catch (error) {
+        console.error("Error updating stats:", error);
+        // Set all stats to 0 if there's an error
+        document.getElementById('totalAirdrops').textContent = '0';
+        document.getElementById('notStartedAirdrops').textContent = '0';
+        document.getElementById('inProgressAirdrops').textContent = '0';
+        document.getElementById('completedAirdrops').textContent = '0';
+      }
     }
 
     // Set up wallet selection UI
