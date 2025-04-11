@@ -24,6 +24,9 @@
       --dark: #212529;
       --gray: #6c757d;
       --gray-light: #e9ecef;
+      --calendar-bg: #e6f0ff;
+      --calendar-border: #b3d1ff;
+      --calendar-today-bg: #cce0ff;
       
       /* Status Colors */
       --confirmed: #38b000;
@@ -345,18 +348,18 @@
     }
 
     .calendar-day {
-      border: 1px solid var(--gray-light);
+      border: 1px solid var(--calendar-border);
       min-height: 100px;
       padding: 8px;
       position: relative;
       cursor: pointer;
-      background: white;
+      background: var(--calendar-bg);
       border-radius: 8px;
       transition: var(--transition);
     }
     
     .calendar-day:hover {
-      background: rgba(67, 97, 238, 0.05);
+      background: #d6e6ff;
       border-color: var(--primary-light);
     }
 
@@ -367,7 +370,7 @@
     }
     
     .calendar-day.today {
-      background: rgba(67, 97, 238, 0.1);
+      background: var(--calendar-today-bg);
       border-color: var(--primary-light);
     }
 
@@ -377,12 +380,12 @@
     }
 
     .calendar-day.has-airdrop:hover {
-      background-color: rgba(67, 97, 238, 0.1);
+      background-color: #c6d6ff;
       border-color: var(--primary-light);
     }
 
     .calendar-day.has-airdrop.today {
-      background-color: rgba(67, 97, 238, 0.15);
+      background-color: #b3ccff;
     }
 
     .day-number {
@@ -397,10 +400,12 @@
 
     .airdrop-dot {
       display: inline-block;
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
-      margin-right: 2px;
+      margin-right: 4px;
+      border: 1px solid white;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
 
     /* Status Dot Colors */
