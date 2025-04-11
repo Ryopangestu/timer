@@ -158,30 +158,6 @@
       display: none;
     }
     
-    .tabs.tracker-active::after {
-      transform: translateX(0);
-    }
-    
-    .tabs.calendar-active::after {
-      transform: translateX(100%);
-    }
-
-    .tabs.checkin-active::after {
-      transform: translateX(200%);
-    }
-
-    .tabs.timer-active::after {
-      transform: translateX(300%);
-    }
-
-    .tabs.spotlight-active::after {
-      transform: translateX(400%);
-    }
-
-    .tabs.settings-active::after {
-      transform: translateX(500%);
-    }
-
     .tab {
       padding: 12px 16px;
       cursor: pointer;
@@ -397,6 +373,16 @@
 
     .calendar-day.has-airdrop {
       border: 2px solid var(--primary);
+      background-color: rgba(67, 97, 238, 0.05);
+    }
+
+    .calendar-day.has-airdrop:hover {
+      background-color: rgba(67, 97, 238, 0.1);
+      border-color: var(--primary-light);
+    }
+
+    .calendar-day.has-airdrop.today {
+      background-color: rgba(67, 97, 238, 0.15);
     }
 
     .day-number {
@@ -2082,7 +2068,7 @@
       }
     }
 
-    // Render the calendar view with border highlighting for dates with airdrops
+    // Render the calendar view with highlighted days that have airdrops
     function renderCalendar() {
       const calendarDays = document.getElementById('calendarDays');
       calendarDays.innerHTML = '';
@@ -2125,12 +2111,17 @@
         
         // Check if this date has airdrops
         const airdrops = getAirdropsByDate(dateStr);
-        const hasAirdrop = airdrops.length > 0;
+        const hasAirdrops = airdrops.length > 0;
         
-        dayElement.className = `calendar-day ${isToday ? 'today' : ''} ${hasAirdrop ? 'has-airdrop' : ''}`;
+        // Set class based on whether it has airdrops and if it's today
+        let dayClass = 'calendar-day';
+        if (isToday) dayClass += ' today';
+        if (hasAirdrops) dayClass += ' has-airdrop';
+        
+        dayElement.className = dayClass;
         dayElement.innerHTML = `<div class="day-number ${isToday ? 'today' : ''}">${day}</div>`;
         
-        if (airdrops.length > 0) {
+        if (hasAirdrops) {
           // Count by progress status
           const notStartedCount = airdrops.filter(a => a.progress === 'not-started').length;
           const inProgressCount = airdrops.filter(a => a.progress === 'in-progress').length;
