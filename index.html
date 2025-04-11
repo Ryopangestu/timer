@@ -24,6 +24,9 @@
       --dark: #212529;
       --gray: #6c757d;
       --gray-light: #e9ecef;
+      --calendar-bg: #e6f0ff;
+      --calendar-border: #b3d1ff;
+      --calendar-today-bg: #cce0ff;
       
       /* Status Colors */
       --confirmed: #38b000;
@@ -345,18 +348,18 @@
     }
 
     .calendar-day {
-      border: 1px solid var(--gray-light);
+      border: 1px solid var(--calendar-border);
       min-height: 100px;
       padding: 8px;
       position: relative;
       cursor: pointer;
-      background: white;
+      background: var(--calendar-bg);
       border-radius: 8px;
       transition: var(--transition);
     }
     
     .calendar-day:hover {
-      background: rgba(67, 97, 238, 0.05);
+      background: #d6e6ff;
       border-color: var(--primary-light);
     }
 
@@ -367,7 +370,7 @@
     }
     
     .calendar-day.today {
-      background: rgba(67, 97, 238, 0.1);
+      background: var(--calendar-today-bg);
       border-color: var(--primary-light);
     }
 
@@ -377,12 +380,12 @@
     }
 
     .calendar-day.has-airdrop:hover {
-      background-color: rgba(67, 97, 238, 0.1);
+      background-color: #c6d6ff;
       border-color: var(--primary-light);
     }
 
     .calendar-day.has-airdrop.today {
-      background-color: rgba(67, 97, 238, 0.15);
+      background-color: #b3ccff;
     }
 
     .day-number {
@@ -397,10 +400,12 @@
 
     .airdrop-dot {
       display: inline-block;
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
-      margin-right: 2px;
+      margin-right: 4px;
+      border: 1px solid white;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
 
     /* Status Dot Colors */
@@ -409,6 +414,53 @@
     .dot-not-started { background: var(--not-started); }
     .dot-in-progress { background: var(--in-progress); }
     .dot-completed { background: var(--completed); }
+
+    /* Tooltip Styles */
+    .calendar-day[data-airdrop-count]:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--dark);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      z-index: 10;
+      margin-bottom: 8px;
+    }
+
+    .calendar-day[data-airdrop-count]:hover::before {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 6px;
+      border-style: solid;
+      border-color: var(--dark) transparent transparent transparent;
+      margin-bottom: 2px;
+      z-index: 11;
+    }
+
+    /* Airdrop Count Indicator */
+    .airdrop-count {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 18px;
+      height: 18px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: bold;
+    }
 
     /* Form Styles */
     .form-container {
@@ -2069,7 +2121,7 @@
     }
 
     // Render the calendar view with highlighted days that have airdrops
-    function renderCalendar() {
+    async function renderCalendar() {
       const calendarDays = document.getElementById('calendarDays');
       calendarDays.innerHTML = '';
       
@@ -2099,6 +2151,9 @@
       const isCurrentMonth = today.getFullYear() === currentDate.getFullYear() && 
                            today.getMonth() === currentDate.getMonth();
       
+      // Get all airdrops for the current month
+      const allAirdrops = await loadFromFirebase('airdrops');
+      
       // Add cells for each day of the month
       for (let day = 1; day <= totalDays; day++) {
         const dayElement = document.createElement('div');
@@ -2110,8 +2165,9 @@
         const dateStr = `${currentDate.getFullYear()}-${(currentDate.getMonth()+1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
         
         // Check if this date has airdrops
-        const airdrops = getAirdropsByDate(dateStr);
-        const hasAirdrops = airdrops.length > 0;
+        const airdrops = allAirdrops.filter(a => a.date === dateStr);
+        const airdropCount = airdrops.length;
+        const hasAirdrops = airdropCount > 0;
         
         // Set class based on whether it has airdrops and if it's today
         let dayClass = 'calendar-day';
@@ -2122,6 +2178,16 @@
         dayElement.innerHTML = `<div class="day-number ${isToday ? 'today' : ''}">${day}</div>`;
         
         if (hasAirdrops) {
+          // Add count badge
+          const countBadge = document.createElement('div');
+          countBadge.className = 'airdrop-count';
+          countBadge.textContent = airdropCount;
+          dayElement.appendChild(countBadge);
+          
+          // Add tooltip attributes
+          dayElement.setAttribute('data-airdrop-count', airdropCount);
+          dayElement.setAttribute('data-tooltip', `${airdropCount} airdrop pada ${day} ${monthNames[currentDate.getMonth()]}`);
+          
           // Count by progress status
           const notStartedCount = airdrops.filter(a => a.progress === 'not-started').length;
           const inProgressCount = airdrops.filter(a => a.progress === 'in-progress').length;
