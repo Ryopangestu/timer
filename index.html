@@ -139,7 +139,7 @@
     .stat-in-progress .stat-value { color: var(--in-progress); }
     .stat-completed .stat-value { color: var(--completed); }
 
-    /* Tabs Navigation - Updated */
+    /* Tabs Navigation */
     .tabs {
       display: flex;
       margin-bottom: 25px;
@@ -393,6 +393,10 @@
     .calendar-day.today {
       background: rgba(67, 97, 238, 0.1);
       border-color: var(--primary-light);
+    }
+
+    .calendar-day.has-airdrop {
+      border: 2px solid var(--primary);
     }
 
     .day-number {
@@ -1076,7 +1080,7 @@
       </div>
     </div>
     
-    <!-- Tabs Navigation - Updated -->
+    <!-- Tabs Navigation -->
     <div class="tabs">
       <div class="tab active" onclick="switchTab('tracker')">
         <i class="fas fa-list-check"></i>
@@ -1869,7 +1873,7 @@
       });
     }
 
-    // Switch between tabs - Updated
+    // Switch between tabs
     function switchTab(tabName) {
       document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.remove('active');
@@ -2078,7 +2082,7 @@
       }
     }
 
-    // Render the calendar view
+    // Render the calendar view with border highlighting for dates with airdrops
     function renderCalendar() {
       const calendarDays = document.getElementById('calendarDays');
       calendarDays.innerHTML = '';
@@ -2116,14 +2120,16 @@
         // Check if this is today
         const isToday = isCurrentMonth && day === today.getDate();
         
-        dayElement.className = `calendar-day ${isToday ? 'today' : ''}`;
-        dayElement.innerHTML = `<div class="day-number ${isToday ? 'today' : ''}">${day}</div>`;
-        
         // Create a date object for this day
         const dateStr = `${currentDate.getFullYear()}-${(currentDate.getMonth()+1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
         
         // Check if this date has airdrops
         const airdrops = getAirdropsByDate(dateStr);
+        const hasAirdrop = airdrops.length > 0;
+        
+        dayElement.className = `calendar-day ${isToday ? 'today' : ''} ${hasAirdrop ? 'has-airdrop' : ''}`;
+        dayElement.innerHTML = `<div class="day-number ${isToday ? 'today' : ''}">${day}</div>`;
+        
         if (airdrops.length > 0) {
           // Count by progress status
           const notStartedCount = airdrops.filter(a => a.progress === 'not-started').length;
